@@ -72,9 +72,14 @@ export function ChatView({ conversation, messages, onSendMessage }: ChatViewProp
 					<div className="h-px flex-1 bg-[var(--border)]" />
 				</div>
 
-				<div className="space-y-4">
-					{messages.map((message) => (
-						<ChatMessage key={message.id} message={message} />
+				<div>
+					{messages.map((message, index) => (
+						<ChatMessage
+							key={message.id}
+							message={message}
+							isGroupedWithPrevious={messages[index - 1]?.side === message.side}
+							isGroupedWithNext={messages[index + 1]?.side === message.side}
+						/>
 					))}
 				</div>
 			</div>
