@@ -126,12 +126,9 @@ function App() {
 		}
 	}
 
-	const handleNewChat = () => {
-		if (!isChatSection(activeView)) {
-			setActiveView('direct')
-			setSelectedConversationId((previous) => conversationsState.direct[0]?.id ?? previous)
-		}
-
+	const handleNewChat = (section: ChatSection) => {
+		setActiveView(section)
+		setSelectedConversationId((previous) => conversationsState[section][0]?.id ?? previous)
 		setNewChatTrigger((previous) => previous + 1)
 	}
 

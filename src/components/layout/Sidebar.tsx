@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { MessageSquare, Plus, Settings, UserCircle, Users } from 'lucide-react'
 import type { ChatSection } from '../../types/chat'
 
@@ -6,10 +7,48 @@ export type SidebarView = ChatSection | 'profile' | 'settings'
 type SidebarProps = {
 	activeView: SidebarView
 	onSectionChange: (section: SidebarView) => void
-	onNewChat: () => void
+	onNewChat: (section: ChatSection) => void
 }
 
 export function Sidebar({ activeView, onSectionChange, onNewChat }: SidebarProps) {
+	const [isNewChatMenuOpen, setIsNewChatMenuOpen] = useState(false)
+	const newChatMenuRef = useRef<HTMLDivElement | null>(null)
+
+	useEffect(() => {
+		const handleClickOutside = (event: MouseEvent) => {
+			if (!newChatMenuRef.current) {
+				return
+			}
+
+			if (!newChatMenuRef.current.contains(event.target as Node)) {
+				setIsNewChatMenuOpen(false)
+			}
+		}
+
+		document.addEventListener('mousedown', handleClickOutside)
+		return () => {
+			document.removeEventListener('mousedown', handleClickOutside)
+		}
+	}, [])
+
+	useEffect(() => {
+		const handleEscape = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') {
+				setIsNewChatMenuOpen(false)
+			}
+		}
+
+		document.addEventListener('keydown', handleEscape)
+		return () => {
+			document.removeEventListener('keydown', handleEscape)
+		}
+	}, [])
+
+	const handleNewChatOption = (section: ChatSection) => {
+		onNewChat(section)
+		setIsNewChatMenuOpen(false)
+	}
+
 	return (
 		<aside className="motion-enter w-[230px] shrink-0 border-r border-[var(--border)] bg-[var(--bg-soft)] px-4 py-5 shadow-[2px_0_8px_rgba(15,23,42,0.04)]">
 			<div className="flex h-full flex-col">
@@ -65,14 +104,36 @@ export function Sidebar({ activeView, onSectionChange, onNewChat }: SidebarProps
 					</button>
 				</nav>
 
-				<div className="mt-auto">
-					<button
-						onClick={onNewChat}
-						className="motion-interactive mb-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[var(--bg-page)] shadow-[0_8px_20px_rgba(26,43,94,0.28)] hover:bg-[var(--accent-strong)]"
-					>
-						<Plus size={17} />
-						New Chat
-					</button>
+				<div className="mt-auto space-y-4">
+					<div ref={newChatMenuRef} className="relative">
+						{isNewChatMenuOpen && (
+							<div className="motion-popover absolute bottom-full left-0 mb-2 w-full rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-2 shadow-lg">
+								<button
+									type="button"
+									onClick={() => handleNewChatOption('direct')}
+									className="motion-interactive flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--bg-soft)]"
+								>
+									<MessageSquare size={15} />
+									New DM
+								</button>
+								<button
+									type="button"
+									onClick={() => handleNewChatOption('groups')}
+									className="motion-interactive mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--bg-soft)]"
+								>
+									<Users size={15} />
+									New Group
+								</button>
+							</div>
+						)}
+						<button
+							onClick={() => setIsNewChatMenuOpen((previous) => !previous)}
+							className="motion-interactive flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[var(--bg-page)] shadow-[0_8px_20px_rgba(26,43,94,0.28)] hover:bg-[var(--accent-strong)]"
+						>
+							<Plus size={17} />
+							New Chat
+						</button>
+					</div>
 					<button className="motion-interactive text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]">Help</button>
 				</div>
 			</div>

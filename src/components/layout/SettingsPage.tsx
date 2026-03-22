@@ -35,9 +35,9 @@ export function SettingsPage({
 		}`
 
 	return (
-		<section className="motion-enter flex min-w-0 flex-1 bg-[var(--bg-surface-alt)] p-6 text-[var(--text-primary)]">
+		<section className="flex min-w-0 flex-1 overflow-y-auto bg-[var(--bg-surface-alt)] p-6 text-[var(--text-primary)]">
 			<div className="mx-auto w-full max-w-4xl space-y-6">
-				<div className="motion-enter-soft rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
+				<div className="rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
 					<h2 className="text-lg font-semibold">OAuth Payload Import</h2>
 					<p className="mt-1 text-sm text-[var(--text-secondary)]">
 						If Google login opens a JSON page, paste that full JSON payload here and import it.
@@ -71,7 +71,7 @@ export function SettingsPage({
 					</div>
 				</div>
 
-				<div className="motion-enter-soft motion-stagger-1 rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
+				<div className="rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
 					<h2 className="text-lg font-semibold">Backend Connection</h2>
 					<p className="mt-1 text-sm text-[var(--text-secondary)]">OAuth2 + JWT session status for API requests and WebSocket chat.</p>
 
@@ -103,7 +103,7 @@ export function SettingsPage({
 					</div>
 				</div>
 
-				<div className="motion-enter-soft motion-stagger-2 rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
+				<div className="rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
 					<h1 className="text-2xl font-semibold">Settings</h1>
 					<p className="mt-1 text-sm text-[var(--text-secondary)]">Control appearance and account preferences.</p>
 
@@ -130,7 +130,7 @@ export function SettingsPage({
 					</div>
 				</div>
 
-				<div className="motion-enter-soft motion-stagger-3 rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
+				<div className="rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
 					<h2 className="text-lg font-semibold">Style Preview</h2>
 					<p className="mt-1 text-sm text-[var(--text-secondary)]">These elements follow your dark mode spec.</p>
 
