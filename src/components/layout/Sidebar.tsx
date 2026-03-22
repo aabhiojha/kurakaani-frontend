@@ -11,7 +11,7 @@ type SidebarProps = {
 
 export function Sidebar({ activeView, onSectionChange, onNewChat }: SidebarProps) {
 	return (
-		<aside className="w-[230px] shrink-0 border-r border-[var(--border)] bg-[var(--bg-soft)] px-4 py-5 shadow-[2px_0_8px_rgba(15,23,42,0.04)]">
+		<aside className="motion-enter w-[230px] shrink-0 border-r border-[var(--border)] bg-[var(--bg-soft)] px-4 py-5 shadow-[2px_0_8px_rgba(15,23,42,0.04)]">
 			<div className="flex h-full flex-col">
 				<div className="mb-8 flex items-center gap-2 px-1">
 					<div className="text-2xl font-semibold text-[var(--text-primary)]">Kurakaani</div>
@@ -21,7 +21,7 @@ export function Sidebar({ activeView, onSectionChange, onNewChat }: SidebarProps
 				<nav className="space-y-2">
 					<button
 						onClick={() => onSectionChange('groups')}
-						className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${
+						className={`motion-interactive flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${
 							activeView === 'groups'
 								? 'bg-[var(--bg-surface)] font-semibold text-[var(--text-primary)] shadow-sm'
 								: 'font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
@@ -32,7 +32,7 @@ export function Sidebar({ activeView, onSectionChange, onNewChat }: SidebarProps
 					</button>
 					<button
 						onClick={() => onSectionChange('direct')}
-						className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${
+						className={`motion-interactive flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${
 							activeView === 'direct'
 								? 'bg-[var(--bg-surface)] font-semibold text-[var(--text-primary)] shadow-sm'
 								: 'font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
@@ -43,7 +43,7 @@ export function Sidebar({ activeView, onSectionChange, onNewChat }: SidebarProps
 					</button>
 					<button
 						onClick={() => onSectionChange('settings')}
-						className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${
+						className={`motion-interactive flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${
 							activeView === 'settings'
 								? 'bg-[var(--bg-surface)] font-semibold text-[var(--text-primary)] shadow-sm'
 								: 'font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
@@ -54,7 +54,7 @@ export function Sidebar({ activeView, onSectionChange, onNewChat }: SidebarProps
 					</button>
 					<button
 						onClick={() => onSectionChange('profile')}
-						className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${
+						className={`motion-interactive flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${
 							activeView === 'profile'
 								? 'bg-[var(--bg-surface)] font-semibold text-[var(--text-primary)] shadow-sm'
 								: 'font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
@@ -68,12 +68,12 @@ export function Sidebar({ activeView, onSectionChange, onNewChat }: SidebarProps
 				<div className="mt-auto">
 					<button
 						onClick={onNewChat}
-						className="mb-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[var(--bg-page)] shadow-[0_8px_20px_rgba(26,43,94,0.28)] transition hover:bg-[var(--accent-strong)]"
+						className="motion-interactive mb-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[var(--bg-page)] shadow-[0_8px_20px_rgba(26,43,94,0.28)] hover:bg-[var(--accent-strong)]"
 					>
 						<Plus size={17} />
 						New Chat
 					</button>
-					<button className="text-xs font-medium text-[var(--text-secondary)] transition hover:text-[var(--text-primary)]">Help</button>
+					<button className="motion-interactive text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]">Help</button>
 				</div>
 			</div>
 		</aside>

@@ -2,14 +2,14 @@ import { Bell, Camera, Mail, MapPin, Phone, ShieldCheck } from 'lucide-react'
 
 export function ProfilePage() {
 	return (
-		<section className="flex min-w-0 flex-1 bg-[var(--bg-surface-alt)] p-6 text-[var(--text-primary)]">
+		<section className="motion-enter flex min-w-0 flex-1 bg-[var(--bg-surface-alt)] p-6 text-[var(--text-primary)]">
 			<div className="mx-auto flex w-full max-w-5xl gap-6">
 				<div className="w-[320px] shrink-0 rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
 					<div className="relative mx-auto mb-4 h-24 w-24 overflow-hidden rounded-full bg-[var(--bubble-sent)] text-center text-2xl font-semibold leading-[6rem] text-white">
 						YO
 						<button
 							type="button"
-							className="absolute bottom-1 right-1 rounded-full bg-[var(--bg-surface)] p-1.5 text-[var(--text-secondary)] shadow"
+							className="motion-interactive absolute bottom-1 right-1 rounded-full bg-[var(--bg-surface)] p-1.5 text-[var(--text-secondary)] shadow"
 							aria-label="change avatar"
 						>
 							<Camera size={14} />
@@ -46,7 +46,7 @@ export function ProfilePage() {
 							<input
 								type="text"
 								defaultValue="Yubraj Oli"
-								className="mt-1.5 w-full rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
+								className="motion-focus mt-1.5 w-full rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
 							/>
 						</label>
 
@@ -55,7 +55,7 @@ export function ProfilePage() {
 							<input
 								type="text"
 								defaultValue="Product Designer"
-								className="mt-1.5 w-full rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
+								className="motion-focus mt-1.5 w-full rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
 							/>
 						</label>
 
@@ -64,7 +64,7 @@ export function ProfilePage() {
 							<textarea
 								rows={4}
 								defaultValue="Designing clear and delightful collaboration experiences for product teams."
-								className="mt-1.5 w-full resize-none rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
+								className="motion-focus mt-1.5 w-full resize-none rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
 							/>
 						</label>
 					</div>
@@ -87,10 +87,10 @@ export function ProfilePage() {
 					</div>
 
 					<div className="mt-6 flex justify-end gap-2">
-						<button type="button" className="rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] transition hover:bg-[var(--bg-soft)]">
+						<button type="button" className="motion-interactive rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-soft)]">
 							Cancel
 						</button>
-						<button type="button" className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--bg-page)] shadow-[0_8px_18px_rgba(26,43,94,0.28)] transition hover:bg-[var(--accent-strong)]">
+						<button type="button" className="motion-interactive rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--bg-page)] shadow-[0_8px_18px_rgba(26,43,94,0.28)] hover:bg-[var(--accent-strong)]">
 							Save Changes
 						</button>
 					</div>

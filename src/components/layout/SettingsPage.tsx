@@ -28,16 +28,16 @@ export function SettingsPage({
 	const [importStatus, setImportStatus] = useState<string | null>(null)
 
 	const modeButtonClass = (mode: 'light' | 'dark' | 'system') =>
-		`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition ${
+		`motion-interactive flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${
 			themeMode === mode
 				? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'
 				: 'border-[var(--border)] bg-[var(--toggle-bg)] text-[var(--toggle-text)] hover:opacity-90'
 		}`
 
 	return (
-		<section className="flex min-w-0 flex-1 bg-[var(--bg-surface-alt)] p-6 text-[var(--text-primary)]">
+		<section className="motion-enter flex min-w-0 flex-1 bg-[var(--bg-surface-alt)] p-6 text-[var(--text-primary)]">
 			<div className="mx-auto w-full max-w-4xl space-y-6">
-				<div className="rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
+				<div className="motion-enter-soft rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
 					<h2 className="text-lg font-semibold">OAuth Payload Import</h2>
 					<p className="mt-1 text-sm text-[var(--text-secondary)]">
 						If Google login opens a JSON page, paste that full JSON payload here and import it.
@@ -48,7 +48,7 @@ export function SettingsPage({
 						onChange={(event) => setOauthPayload(event.target.value)}
 						rows={7}
 						placeholder='Paste OAuth JSON: { "accessToken": "...", "expiresAt": "...", "user": { ... } }'
-						className="mt-4 w-full resize-y rounded-xl border border-[var(--border)] bg-[var(--bg-surface-alt)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--accent)]"
+						className="motion-focus mt-4 w-full resize-y rounded-xl border border-[var(--border)] bg-[var(--bg-surface-alt)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--accent)]"
 					/>
 
 					<div className="mt-3 flex items-center justify-between">
@@ -63,7 +63,7 @@ export function SettingsPage({
 									setImportStatus(result.error)
 								}
 							}}
-							className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--bg-page)] transition hover:bg-[var(--accent-strong)]"
+							className="motion-interactive rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--bg-page)] hover:bg-[var(--accent-strong)]"
 						>
 							Import Session
 						</button>
@@ -71,7 +71,7 @@ export function SettingsPage({
 					</div>
 				</div>
 
-				<div className="rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
+				<div className="motion-enter-soft motion-stagger-1 rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
 					<h2 className="text-lg font-semibold">Backend Connection</h2>
 					<p className="mt-1 text-sm text-[var(--text-secondary)]">OAuth2 + JWT session status for API requests and WebSocket chat.</p>
 
@@ -87,7 +87,7 @@ export function SettingsPage({
 							<button
 								type="button"
 								onClick={onLogout}
-								className="rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] transition hover:opacity-90"
+								className="motion-interactive rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] hover:opacity-90"
 							>
 								Logout
 							</button>
@@ -95,7 +95,7 @@ export function SettingsPage({
 							<button
 								type="button"
 								onClick={onLogin}
-								className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--bg-page)] transition hover:bg-[var(--accent-strong)]"
+								className="motion-interactive rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--bg-page)] hover:bg-[var(--accent-strong)]"
 							>
 								Login with Google
 							</button>
@@ -103,7 +103,7 @@ export function SettingsPage({
 					</div>
 				</div>
 
-				<div className="rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
+				<div className="motion-enter-soft motion-stagger-2 rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
 					<h1 className="text-2xl font-semibold">Settings</h1>
 					<p className="mt-1 text-sm text-[var(--text-secondary)]">Control appearance and account preferences.</p>
 
@@ -130,7 +130,7 @@ export function SettingsPage({
 					</div>
 				</div>
 
-				<div className="rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
+				<div className="motion-enter-soft motion-stagger-3 rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
 					<h2 className="text-lg font-semibold">Style Preview</h2>
 					<p className="mt-1 text-sm text-[var(--text-secondary)]">These elements follow your dark mode spec.</p>
 
@@ -148,7 +148,7 @@ export function SettingsPage({
 					<div className="mt-5">
 						<button
 							type="button"
-							className="inline-flex items-center gap-2 rounded-xl border border-[var(--resume-border)] bg-[var(--resume-bg)] px-4 py-2.5 text-sm font-semibold text-[var(--resume-text)] transition hover:opacity-90"
+							className="motion-interactive inline-flex items-center gap-2 rounded-xl border border-[var(--resume-border)] bg-[var(--resume-bg)] px-4 py-2.5 text-sm font-semibold text-[var(--resume-text)] hover:opacity-90"
 						>
 							<Download size={15} />
 							Resume

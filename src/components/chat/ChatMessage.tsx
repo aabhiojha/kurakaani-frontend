@@ -12,7 +12,7 @@ export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext 
 
 	if (isSystemMessage) {
 		return (
-			<div className="mt-4 flex justify-center">
+			<div className="motion-enter-soft mt-4 flex justify-center">
 				<div className="flex flex-col items-center">
 					<div className="rounded-full border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)]">
 						{message.text}
@@ -24,7 +24,7 @@ export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext 
 	}
 
 	return (
-		<div className={`flex ${isRight ? 'justify-end' : 'justify-start'} ${isGroupedWithPrevious ? 'mt-1' : 'mt-4'}`}>
+		<div className={`motion-enter-soft flex ${isRight ? 'justify-end' : 'justify-start'} ${isGroupedWithPrevious ? 'mt-1' : 'mt-4'}`}>
 			<div className={`flex max-w-[80%] items-start gap-2 ${isRight ? 'flex-row-reverse' : 'flex-row'}`}>
 				{isGroupedWithNext ? (
 					<div className="h-8 w-8 shrink-0" />
@@ -59,7 +59,7 @@ export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext 
 							)}
 						</div>
 						<div
-							className={`pointer-events-none absolute -top-8 z-10 whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1 text-[11px] text-[var(--text-secondary)] opacity-0 shadow-sm transition-opacity group-hover:opacity-100 ${
+							className={`pointer-events-none absolute -top-8 z-10 whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1 text-[11px] text-[var(--text-secondary)] opacity-0 shadow-sm transition-opacity duration-200 ease-out group-hover:opacity-100 ${
 								isRight ? 'right-0' : 'left-0'
 							}`}
 						>

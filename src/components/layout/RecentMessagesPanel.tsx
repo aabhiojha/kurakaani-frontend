@@ -64,11 +64,11 @@ export function RecentMessagesPanel({
 	}
 
 	return (
-		<section className="w-[300px] shrink-0 border-r border-[var(--border)] bg-[var(--bg-surface)]">
+		<section className="motion-enter motion-stagger-1 w-[300px] shrink-0 border-r border-[var(--border)] bg-[var(--bg-surface)]">
 			<div className="border-b border-[var(--border)] px-5 py-4">
 				<div className="mb-4 flex items-center justify-between">
 					<h2 className="text-lg font-semibold text-[var(--text-primary)]">{headerTitle}</h2>
-					<button className="rounded-lg p-2 text-[var(--text-secondary)] transition hover:bg-[var(--bg-soft)] hover:text-[var(--text-primary)]" aria-label="filter messages">
+					<button className="motion-interactive rounded-lg p-2 text-[var(--text-secondary)] hover:bg-[var(--bg-soft)] hover:text-[var(--text-primary)]" aria-label="filter messages">
 						<SlidersHorizontal size={17} />
 					</button>
 				</div>
@@ -77,11 +77,11 @@ export function RecentMessagesPanel({
 					<input
 						type="text"
 						placeholder={searchPlaceholder}
-						className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] py-2.5 pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+						className="motion-focus w-full rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] py-2.5 pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
 					/>
 				</label>
 				{isComposerOpen && (
-					<form onSubmit={handleCreateChat} className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface-alt)] p-3">
+					<form onSubmit={handleCreateChat} className="motion-enter-soft mt-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface-alt)] p-3">
 						<div className="mb-2 flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
 							<Plus size={14} />
 							{section === 'groups' ? 'Create Group' : 'Create Direct Chat'}
@@ -91,20 +91,20 @@ export function RecentMessagesPanel({
 							value={createName}
 							onChange={(event) => setCreateName(event.target.value)}
 							placeholder={section === 'groups' ? 'Group name' : 'Person name'}
-							className="mb-2 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+							className="motion-focus mb-2 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
 						/>
 						<input
 							type="text"
 							value={createDescription}
 							onChange={(event) => setCreateDescription(event.target.value)}
 							placeholder={section === 'groups' ? 'Description (optional)' : 'Intro message (optional)'}
-							className="mb-2 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+							className="motion-focus mb-2 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
 						/>
 						<div className="flex items-center justify-between">
 							<button
 								type="submit"
 								disabled={isCreatingChat}
-								className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-[var(--bg-page)] transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-70"
+								className="motion-interactive rounded-lg bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-[var(--bg-page)] hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-70"
 							>
 								{isCreatingChat ? 'Creating...' : 'Create'}
 							</button>
@@ -119,7 +119,7 @@ export function RecentMessagesPanel({
 					<article
 						key={conversation.id}
 						onClick={() => onSelectConversation(conversation.id)}
-						className={`flex cursor-pointer gap-3 rounded-xl px-3 py-3 transition ${
+						className={`motion-interactive flex cursor-pointer gap-3 rounded-xl px-3 py-3 ${
 							conversation.id === selectedConversationId ? 'bg-[var(--accent-soft)]' : 'hover:bg-[var(--bg-soft)]'
 						}`}
 					>

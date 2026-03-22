@@ -1,6 +1,12 @@
 @import "tailwindcss";
 
 :root {
+	--ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+	--ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+	--ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+	--dur-instant: 140ms;
+	--dur-state: 240ms;
+	--dur-enter: 420ms;
 	--bg-page: #e8edf2;
 	--bg-surface: #f0f4f8;
 	--bg-surface-alt: #eef2f6;
@@ -53,4 +59,100 @@
 body {
 	background-color: var(--bg-page);
 	color: var(--text-primary);
+	transition:
+		background-color var(--dur-state) var(--ease-out-quart),
+		color var(--dur-state) var(--ease-out-quart);
+}
+
+@keyframes fade-up-in {
+	from {
+		opacity: 0;
+		transform: translate3d(0, 10px, 0);
+	}
+	to {
+		opacity: 1;
+		transform: translate3d(0, 0, 0);
+	}
+}
+
+@keyframes soft-scale-in {
+	from {
+		opacity: 0;
+		transform: scale(0.985);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+.motion-enter {
+	animation: fade-up-in var(--dur-enter) var(--ease-out-expo) both;
+}
+
+.motion-enter-soft {
+	animation: soft-scale-in 300ms var(--ease-out-quint) both;
+}
+
+.motion-popover {
+	animation: soft-scale-in 220ms var(--ease-out-quart) both;
+	transform-origin: bottom right;
+}
+
+.motion-stagger-1 {
+	animation-delay: 80ms;
+}
+
+.motion-stagger-2 {
+	animation-delay: 140ms;
+}
+
+.motion-stagger-3 {
+	animation-delay: 200ms;
+}
+
+.motion-interactive {
+	transition:
+		transform var(--dur-state) var(--ease-out-quart),
+		opacity var(--dur-state) var(--ease-out-quart),
+		background-color var(--dur-state) var(--ease-out-quart),
+		border-color var(--dur-state) var(--ease-out-quart),
+		color var(--dur-state) var(--ease-out-quart),
+		box-shadow var(--dur-state) var(--ease-out-quart);
+}
+
+.motion-interactive:hover {
+	transform: translate3d(0, -1px, 0);
+}
+
+.motion-interactive:active {
+	transform: scale(0.98);
+	transition-duration: var(--dur-instant);
+}
+
+.motion-focus {
+	transition:
+		border-color var(--dur-state) var(--ease-out-quart),
+		box-shadow var(--dur-state) var(--ease-out-quart),
+		background-color var(--dur-state) var(--ease-out-quart);
+}
+
+.motion-focus:focus-visible {
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+
+	.motion-interactive:hover,
+	.motion-interactive:active {
+		transform: none !important;
+	}
 }
