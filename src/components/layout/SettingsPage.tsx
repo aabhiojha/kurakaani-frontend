@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Download, Laptop, Moon, Sun } from 'lucide-react'
 
 type SettingsPageProps = {
@@ -9,6 +10,7 @@ type SettingsPageProps = {
 	backendStatus: string
 	onLogin: () => void
 	onLogout: () => void
+	onImportSessionPayload: (payloadText: string) => { ok: true } | { ok: false; error: string }
 }
 
 export function SettingsPage({
@@ -20,7 +22,11 @@ export function SettingsPage({
 	backendStatus,
 	onLogin,
 	onLogout,
+	onImportSessionPayload,
 }: SettingsPageProps) {
+	const [oauthPayload, setOauthPayload] = useState('')
+	const [importStatus, setImportStatus] = useState<string | null>(null)
+
 	const modeButtonClass = (mode: 'light' | 'dark' | 'system') =>
 		`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition ${
 			themeMode === mode
@@ -31,6 +37,40 @@ export function SettingsPage({
 	return (
 		<section className="flex min-w-0 flex-1 bg-[var(--bg-surface-alt)] p-6 text-[var(--text-primary)]">
 			<div className="mx-auto w-full max-w-4xl space-y-6">
+				<div className="rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
+					<h2 className="text-lg font-semibold">OAuth Payload Import</h2>
+					<p className="mt-1 text-sm text-[var(--text-secondary)]">
+						If Google login opens a JSON page, paste that full JSON payload here and import it.
+					</p>
+
+					<textarea
+						value={oauthPayload}
+						onChange={(event) => setOauthPayload(event.target.value)}
+						rows={7}
+						placeholder='Paste OAuth JSON: { "accessToken": "...", "expiresAt": "...", "user": { ... } }'
+						className="mt-4 w-full resize-y rounded-xl border border-[var(--border)] bg-[var(--bg-surface-alt)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--accent)]"
+					/>
+
+					<div className="mt-3 flex items-center justify-between">
+						<button
+							type="button"
+							onClick={() => {
+								const result = onImportSessionPayload(oauthPayload)
+								if (result.ok) {
+									setImportStatus('Session imported successfully.')
+									setOauthPayload('')
+								} else {
+									setImportStatus(result.error)
+								}
+							}}
+							className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--bg-page)] transition hover:bg-[var(--accent-strong)]"
+						>
+							Import Session
+						</button>
+						{importStatus && <p className="text-xs text-[var(--text-secondary)]">{importStatus}</p>}
+					</div>
+				</div>
+
 				<div className="rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
 					<h2 className="text-lg font-semibold">Backend Connection</h2>
 					<p className="mt-1 text-sm text-[var(--text-secondary)]">OAuth2 + JWT session status for API requests and WebSocket chat.</p>

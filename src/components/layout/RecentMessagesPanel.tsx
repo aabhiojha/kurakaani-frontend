@@ -1,4 +1,6 @@
-import { Search, SlidersHorizontal } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import type { FormEvent } from 'react'
+import { Plus, Search, SlidersHorizontal } from 'lucide-react'
 import type { ChatSection, Conversation } from '../../types/chat'
 
 type RecentMessagesPanelProps = {
@@ -6,11 +8,60 @@ type RecentMessagesPanelProps = {
 	conversations: Conversation[]
 	selectedConversationId: number
 	onSelectConversation: (conversationId: number) => void
+	onCreateDirect: (name: string, description: string) => Promise<{ ok: boolean; error?: string }>
+	onCreateGroup: (name: string, description: string) => Promise<{ ok: boolean; error?: string }>
+	newChatTrigger: number
 }
 
-export function RecentMessagesPanel({ section, conversations, selectedConversationId, onSelectConversation }: RecentMessagesPanelProps) {
+export function RecentMessagesPanel({
+	section,
+	conversations,
+	selectedConversationId,
+	onSelectConversation,
+	onCreateDirect,
+	onCreateGroup,
+	newChatTrigger,
+}: RecentMessagesPanelProps) {
+	const [createName, setCreateName] = useState('')
+	const [createDescription, setCreateDescription] = useState('')
+	const [isCreatingChat, setIsCreatingChat] = useState(false)
+	const [createChatStatus, setCreateChatStatus] = useState<string | null>(null)
+	const [isComposerOpen, setIsComposerOpen] = useState(false)
 	const headerTitle = section === 'groups' ? 'Groups' : 'Recent Messages'
 	const searchPlaceholder = section === 'groups' ? 'Search groups...' : 'Search discussions...'
+
+	useEffect(() => {
+		if (newChatTrigger > 0) {
+			setIsComposerOpen(true)
+		}
+	}, [newChatTrigger])
+
+	const handleCreateChat = async (event: FormEvent) => {
+		event.preventDefault()
+		const trimmedName = createName.trim()
+		const trimmedDescription = createDescription.trim()
+
+		if (!trimmedName) {
+			setCreateChatStatus(section === 'groups' ? 'Group name is required.' : 'Name is required.')
+			return
+		}
+
+		setIsCreatingChat(true)
+		const result = section === 'groups'
+			? await onCreateGroup(trimmedName, trimmedDescription)
+			: await onCreateDirect(trimmedName, trimmedDescription)
+		setIsCreatingChat(false)
+
+		if (result.ok) {
+			setCreateName('')
+			setCreateDescription('')
+			setIsComposerOpen(false)
+			setCreateChatStatus(section === 'groups' ? 'Group created successfully.' : 'Direct chat created successfully.')
+			return
+		}
+
+		setCreateChatStatus(result.error ?? 'Failed to create chat.')
+	}
 
 	return (
 		<section className="w-[300px] shrink-0 border-r border-[var(--border)] bg-[var(--bg-surface)]">
@@ -29,6 +80,38 @@ export function RecentMessagesPanel({ section, conversations, selectedConversati
 						className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] py-2.5 pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
 					/>
 				</label>
+				{isComposerOpen && (
+					<form onSubmit={handleCreateChat} className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface-alt)] p-3">
+						<div className="mb-2 flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
+							<Plus size={14} />
+							{section === 'groups' ? 'Create Group' : 'Create Direct Chat'}
+						</div>
+						<input
+							type="text"
+							value={createName}
+							onChange={(event) => setCreateName(event.target.value)}
+							placeholder={section === 'groups' ? 'Group name' : 'Person name'}
+							className="mb-2 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+						/>
+						<input
+							type="text"
+							value={createDescription}
+							onChange={(event) => setCreateDescription(event.target.value)}
+							placeholder={section === 'groups' ? 'Description (optional)' : 'Intro message (optional)'}
+							className="mb-2 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+						/>
+						<div className="flex items-center justify-between">
+							<button
+								type="submit"
+								disabled={isCreatingChat}
+								className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-[var(--bg-page)] transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-70"
+							>
+								{isCreatingChat ? 'Creating...' : 'Create'}
+							</button>
+							{createChatStatus && <span className="text-[11px] text-[var(--text-muted)]">{createChatStatus}</span>}
+						</div>
+					</form>
+				)}
 			</div>
 
 			<div className="space-y-1 px-2 py-2">

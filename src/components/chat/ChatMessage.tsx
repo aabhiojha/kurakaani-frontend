@@ -7,7 +7,21 @@ type ChatMessageProps = {
 }
 
 export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext }: ChatMessageProps) {
+	const isSystemMessage = message.senderName === 'System'
 	const isRight = message.side === 'right'
+
+	if (isSystemMessage) {
+		return (
+			<div className="mt-4 flex justify-center">
+				<div className="flex flex-col items-center">
+					<div className="rounded-full border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)]">
+						{message.text}
+					</div>
+					<span className="mt-1 text-[11px] text-[var(--text-muted)]">{message.timestamp}</span>
+				</div>
+			</div>
+		)
+	}
 
 	return (
 		<div className={`flex ${isRight ? 'justify-end' : 'justify-start'} ${isGroupedWithPrevious ? 'mt-1' : 'mt-4'}`}>

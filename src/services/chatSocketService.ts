@@ -18,11 +18,15 @@ export class ChatSocketService {
 	private client: Client | null = null
 	private activeRoomId: number | null = null
 
-	connect(roomId: number, options: ConnectOptions) {
+	connect(roomId: number, options: ConnectOptions, accessToken?: string) {
 		this.disconnect()
 
+		const tokenQuery = accessToken
+			? `?accessToken=${encodeURIComponent(accessToken)}&token=${encodeURIComponent(accessToken)}`
+			: ''
+
 		this.client = new Client({
-			webSocketFactory: () => new SockJS(`${API_BASE_URL}/chat`),
+			webSocketFactory: () => new SockJS(`${API_BASE_URL}/chat${tokenQuery}`),
 			reconnectDelay: 5000,
 			onStompError: (frame) => {
 				options.onError?.(frame.headers.message ?? 'WebSocket STOMP error')

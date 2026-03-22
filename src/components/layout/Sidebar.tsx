@@ -6,9 +6,10 @@ export type SidebarView = ChatSection | 'profile' | 'settings'
 type SidebarProps = {
 	activeView: SidebarView
 	onSectionChange: (section: SidebarView) => void
+	onNewChat: () => void
 }
 
-export function Sidebar({ activeView, onSectionChange }: SidebarProps) {
+export function Sidebar({ activeView, onSectionChange, onNewChat }: SidebarProps) {
 	return (
 		<aside className="w-[230px] shrink-0 border-r border-[var(--border)] bg-[var(--bg-soft)] px-4 py-5 shadow-[2px_0_8px_rgba(15,23,42,0.04)]">
 			<div className="flex h-full flex-col">
@@ -65,7 +66,10 @@ export function Sidebar({ activeView, onSectionChange }: SidebarProps) {
 				</nav>
 
 				<div className="mt-auto">
-					<button className="mb-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[var(--bg-page)] shadow-[0_8px_20px_rgba(26,43,94,0.28)] transition hover:bg-[var(--accent-strong)]">
+					<button
+						onClick={onNewChat}
+						className="mb-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[var(--bg-page)] shadow-[0_8px_20px_rgba(26,43,94,0.28)] transition hover:bg-[var(--accent-strong)]"
+					>
 						<Plus size={17} />
 						New Chat
 					</button>
