@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import type { Message } from '../../types/chat'
 
 type ChatMessageProps = {
@@ -7,8 +8,31 @@ type ChatMessageProps = {
 }
 
 export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext }: ChatMessageProps) {
+	const [isMetaVisible, setIsMetaVisible] = useState(false)
+	const messageMetaRef = useRef<HTMLDivElement | null>(null)
 	const isSystemMessage = message.senderName === 'System'
 	const isRight = message.side === 'right'
+
+	useEffect(() => {
+		if (!isMetaVisible) {
+			return
+		}
+
+		const handlePointerDown = (event: PointerEvent) => {
+			if (!messageMetaRef.current) {
+				return
+			}
+
+			if (!messageMetaRef.current.contains(event.target as Node)) {
+				setIsMetaVisible(false)
+			}
+		}
+
+		document.addEventListener('pointerdown', handlePointerDown)
+		return () => {
+			document.removeEventListener('pointerdown', handlePointerDown)
+		}
+	}, [isMetaVisible])
 
 	if (isSystemMessage) {
 		return (
@@ -39,8 +63,17 @@ export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext 
 				)}
 				<div className={`${isRight ? 'items-end' : 'items-start'} flex flex-col`}>
 					{!isGroupedWithPrevious && <span className="mb-1 px-1 text-xs font-medium text-[var(--text-secondary)]">{message.senderName}</span>}
-					<div className="group relative">
+					<div ref={messageMetaRef} className="group relative">
 						<div
+							onClick={() => setIsMetaVisible((previous) => !previous)}
+							onKeyDown={(event) => {
+								if (event.key === 'Enter' || event.key === ' ') {
+									event.preventDefault()
+									setIsMetaVisible((previous) => !previous)
+								}
+							}}
+							role="button"
+							tabIndex={0}
 							className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
 								isRight
 									? 'rounded-br-sm bg-[var(--bubble-sent)] text-white'
@@ -57,14 +90,24 @@ export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext 
 							)}
 						</div>
 						<div
-							className={`pointer-events-none absolute -top-8 z-10 whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1 text-[11px] text-[var(--text-secondary)] opacity-0 shadow-sm transition-opacity duration-200 ease-out group-hover:opacity-100 ${
+							className={`pointer-events-none absolute -top-8 z-10 whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1 text-[11px] text-[var(--text-secondary)] shadow-sm transition-opacity duration-200 ease-out ${
+								isMetaVisible ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+							} ${
 								isRight ? 'right-0' : 'left-0'
 							}`}
 						>
 							{message.senderName} • {message.timestamp}
 						</div>
 					</div>
-					{!isGroupedWithNext && <span className="mt-1 px-1 text-xs text-[var(--text-muted)]">{message.timestamp}</span>}
+					{!isGroupedWithNext && (
+						<button
+							type="button"
+							onClick={() => setIsMetaVisible((previous) => !previous)}
+							className="mt-1 px-1 text-xs text-[var(--text-muted)]"
+						>
+							{message.timestamp}
+						</button>
+					)}
 				</div>
 			</div>
 		</div>

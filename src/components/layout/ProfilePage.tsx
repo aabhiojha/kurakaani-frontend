@@ -1,4 +1,4 @@
-import { Bell, Camera, Mail, MapPin, Phone, ShieldCheck } from 'lucide-react'
+import { Camera, Mail, MapPin, Phone } from 'lucide-react'
 
 export function ProfilePage() {
 	return (
@@ -68,23 +68,6 @@ export function ProfilePage() {
 								className="motion-focus mt-1.5 w-full resize-none rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
 							/>
 						</label>
-					</div>
-
-					<div className="mt-6 space-y-3 rounded-2xl border border-[var(--border)] p-4">
-						<div className="flex items-center justify-between text-sm">
-							<div className="flex items-center gap-2 text-[var(--text-primary)]">
-								<Bell size={16} className="text-[var(--text-secondary)]" />
-								Message Notifications
-							</div>
-							<span className="rounded-full bg-[var(--success-bg)] px-2.5 py-1 text-xs font-semibold text-[var(--success-text)]">Enabled</span>
-						</div>
-						<div className="flex items-center justify-between text-sm">
-							<div className="flex items-center gap-2 text-[var(--text-primary)]">
-								<ShieldCheck size={16} className="text-[var(--text-secondary)]" />
-								Two-Factor Authentication
-							</div>
-							<span className="rounded-full bg-[var(--pill-bg)] px-2.5 py-1 text-xs font-semibold text-[var(--pill-text)]">Recommended</span>
-						</div>
 					</div>
 
 					<div className="mt-6 flex justify-end gap-2">
