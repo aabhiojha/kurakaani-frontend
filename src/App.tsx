@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChatView } from './components/chat/ChatView'
 import { ProfilePage } from './components/layout/ProfilePage'
 import { RecentMessagesPanel } from './components/layout/RecentMessagesPanel'
@@ -9,13 +9,34 @@ import { conversationMessages, conversationsBySection } from './data/chatData'
 import type { ChatSection, Message } from './types/chat'
 
 const isChatSection = (view: SidebarView): view is ChatSection => view === 'direct' || view === 'groups'
+const THEME_STORAGE_KEY = 'kurakaani-theme'
+type ThemeMode = 'light' | 'dark' | 'system'
 
 function App() {
 	const [activeView, setActiveView] = useState<SidebarView>('direct')
-	const [isDarkMode, setIsDarkMode] = useState(false)
+	const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+		if (typeof window === 'undefined') {
+			return 'system'
+		}
+
+		const saved = window.localStorage.getItem(THEME_STORAGE_KEY)
+		if (saved === 'light' || saved === 'dark' || saved === 'system') {
+			return saved
+		}
+
+		return 'system'
+	})
+	const [systemPrefersDark, setSystemPrefersDark] = useState(() => {
+		if (typeof window === 'undefined') {
+			return false
+		}
+
+		return window.matchMedia('(prefers-color-scheme: dark)').matches
+	})
 	const [messagesByConversation, setMessagesByConversation] = useState<Record<number, Message[]>>(conversationMessages)
 	const [selectedConversationId, setSelectedConversationId] = useState<number>(conversationsBySection.direct[0].id)
 	const activeSection: ChatSection = isChatSection(activeView) ? activeView : 'direct'
+ 	const isDarkMode = themeMode === 'system' ? systemPrefersDark : themeMode === 'dark'
 
 	const activeConversations = conversationsBySection[activeSection]
 
@@ -58,13 +79,32 @@ function App() {
 		})
 	}
 
+	useEffect(() => {
+		window.localStorage.setItem(THEME_STORAGE_KEY, themeMode)
+	}, [themeMode])
+
+	useEffect(() => {
+		const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+
+		const handleChange = (event: MediaQueryListEvent) => {
+			setSystemPrefersDark(event.matches)
+		}
+
+		setSystemPrefersDark(mediaQuery.matches)
+		mediaQuery.addEventListener('change', handleChange)
+
+		return () => {
+			mediaQuery.removeEventListener('change', handleChange)
+		}
+	}, [])
+
 	return (
 		<div data-theme={isDarkMode ? 'dark' : 'light'} className="flex h-screen min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)] antialiased">
 			<Sidebar activeView={activeView} onSectionChange={handleSectionChange} />
 			{activeView === 'profile' ? (
 				<ProfilePage />
 			) : activeView === 'settings' ? (
-				<SettingsPage isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode((prev) => !prev)} />
+				<SettingsPage themeMode={themeMode} isDarkMode={isDarkMode} onThemeModeChange={setThemeMode} />
 			) : (
 				<>
 					<RecentMessagesPanel

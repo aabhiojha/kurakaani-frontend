@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent } from 'react'
-import { CircleEllipsis, Image as ImageIcon, Plus, Search, Smile, SquareArrowOutUpRight } from 'lucide-react'
+import { CircleEllipsis, Image as ImageIcon, Plus, Search, SendHorizontal, Smile } from 'lucide-react'
 import { ChatMessage } from './ChatMessage'
 import type { Conversation, Message } from '../../types/chat'
 
@@ -12,6 +12,36 @@ type ChatViewProps = {
 
 export function ChatView({ conversation, messages, onSendMessage }: ChatViewProps) {
 	const [draft, setDraft] = useState('')
+	const [isEmojiOpen, setIsEmojiOpen] = useState(false)
+	const messagesContainerRef = useRef<HTMLDivElement | null>(null)
+ 	const emojiPickerRef = useRef<HTMLDivElement | null>(null)
+	const emojiOptions = ['😀', '😂', '😍', '👍', '🔥', '🎉', '🙏', '💬']
+
+	useEffect(() => {
+		const container = messagesContainerRef.current
+		if (!container) {
+			return
+		}
+
+		container.scrollTop = container.scrollHeight
+	}, [conversation.id, messages])
+
+	useEffect(() => {
+		const handleClickOutside = (event: MouseEvent) => {
+			if (!emojiPickerRef.current) {
+				return
+			}
+
+			if (!emojiPickerRef.current.contains(event.target as Node)) {
+				setIsEmojiOpen(false)
+			}
+		}
+
+		document.addEventListener('mousedown', handleClickOutside)
+		return () => {
+			document.removeEventListener('mousedown', handleClickOutside)
+		}
+	}, [])
 
 	const sendMessage = () => {
 		const cleaned = draft.trim()
@@ -33,6 +63,11 @@ export function ChatView({ conversation, messages, onSendMessage }: ChatViewProp
 			event.preventDefault()
 			sendMessage()
 		}
+	}
+
+	const onSelectEmoji = (emoji: string) => {
+		setDraft((prev) => `${prev}${emoji}`)
+		setIsEmojiOpen(false)
 	}
 
 	return (
@@ -65,7 +100,7 @@ export function ChatView({ conversation, messages, onSendMessage }: ChatViewProp
 				</div>
 			</header>
 
-			<div className="flex-1 overflow-y-auto bg-[var(--bg-surface-alt)] px-8 py-6">
+			<div ref={messagesContainerRef} className="flex-1 overflow-y-auto bg-[var(--bg-surface-alt)] px-8 py-6">
 				<div className="mb-7 flex items-center gap-3">
 					<div className="h-px flex-1 bg-[var(--border)]" />
 					<span className="text-xs font-medium tracking-[0.1em] text-[var(--text-muted)]">OCTOBER 24, 2023</span>
@@ -103,15 +138,39 @@ export function ChatView({ conversation, messages, onSendMessage }: ChatViewProp
 							className="min-h-[40px] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
 						/>
 
-						<button type="button" className="rounded-xl p-2 text-[var(--text-secondary)] transition hover:bg-[var(--bg-surface)] hover:text-[var(--accent)]" aria-label="emoji">
-							<Smile size={18} />
-						</button>
+						<div ref={emojiPickerRef} className="relative">
+							<button
+								type="button"
+								onClick={() => setIsEmojiOpen((prev) => !prev)}
+								className="rounded-xl p-2 text-[var(--text-secondary)] transition hover:bg-[var(--bg-surface)] hover:text-[var(--accent)]"
+								aria-label="emoji"
+							>
+								<Smile size={18} />
+							</button>
+							{isEmojiOpen && (
+								<div className="absolute bottom-12 right-0 z-20 w-52 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-2 shadow-lg">
+									<div className="grid grid-cols-4 gap-1">
+										{emojiOptions.map((emoji) => (
+											<button
+												key={emoji}
+												type="button"
+												onClick={() => onSelectEmoji(emoji)}
+												className="rounded-lg p-2 text-lg transition hover:bg-[var(--bg-soft)]"
+												aria-label={`insert ${emoji}`}
+											>
+												{emoji}
+											</button>
+										))}
+									</div>
+								</div>
+							)}
+						</div>
 						<button
 							type="submit"
 							className="rounded-xl bg-[var(--accent)] p-2 text-[var(--bg-page)] shadow-[0_8px_18px_rgba(26,43,94,0.28)] transition hover:bg-[var(--accent-strong)]"
 							aria-label="send message"
 						>
-							<SquareArrowOutUpRight size={17} />
+							<SendHorizontal size={17} />
 						</button>
 					</div>
 				</div>

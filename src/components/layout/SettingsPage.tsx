@@ -1,11 +1,19 @@
-import { Download, Moon, Sun } from 'lucide-react'
+import { Download, Laptop, Moon, Sun } from 'lucide-react'
 
 type SettingsPageProps = {
+	themeMode: 'light' | 'dark' | 'system'
 	isDarkMode: boolean
-	onToggleDarkMode: () => void
+	onThemeModeChange: (mode: 'light' | 'dark' | 'system') => void
 }
 
-export function SettingsPage({ isDarkMode, onToggleDarkMode }: SettingsPageProps) {
+export function SettingsPage({ themeMode, isDarkMode, onThemeModeChange }: SettingsPageProps) {
+	const modeButtonClass = (mode: 'light' | 'dark' | 'system') =>
+		`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition ${
+			themeMode === mode
+				? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'
+				: 'border-[var(--border)] bg-[var(--toggle-bg)] text-[var(--toggle-text)] hover:opacity-90'
+		}`
+
 	return (
 		<section className="flex min-w-0 flex-1 bg-[var(--bg-surface-alt)] p-6 text-[var(--text-primary)]">
 			<div className="mx-auto w-full max-w-4xl space-y-6">
@@ -15,18 +23,24 @@ export function SettingsPage({ isDarkMode, onToggleDarkMode }: SettingsPageProps
 
 					<div className="mt-6 flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--bg-surface-alt)] p-4">
 						<div>
-							<h2 className="text-base font-semibold">Dark Mode</h2>
-							<p className="text-sm text-[var(--text-secondary)]">Use the near-black interface palette.</p>
+							<h2 className="text-base font-semibold">Theme</h2>
+							<p className="text-sm text-[var(--text-secondary)]">Choose light, dark, or follow your system preference.</p>
+							<p className="mt-1 text-xs text-[var(--text-muted)]">Current: {isDarkMode ? 'Dark' : 'Light'}</p>
 						</div>
-						<button
-							type="button"
-							onClick={onToggleDarkMode}
-							className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--toggle-bg)] px-3 py-2 text-sm font-medium text-[var(--toggle-text)] transition hover:opacity-90"
-							aria-label="toggle dark mode"
-						>
-							{isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
-							{isDarkMode ? 'Light' : 'Dark'}
-						</button>
+						<div className="flex items-center gap-2">
+							<button type="button" onClick={() => onThemeModeChange('light')} className={modeButtonClass('light')} aria-label="use light theme">
+								<Sun size={16} />
+								Light
+							</button>
+							<button type="button" onClick={() => onThemeModeChange('dark')} className={modeButtonClass('dark')} aria-label="use dark theme">
+								<Moon size={16} />
+								Dark
+							</button>
+							<button type="button" onClick={() => onThemeModeChange('system')} className={modeButtonClass('system')} aria-label="use system theme">
+								<Laptop size={16} />
+								System
+							</button>
+						</div>
 					</div>
 				</div>
 
