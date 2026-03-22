@@ -67,7 +67,10 @@ export function RecentMessagesPanel({
 		<section className="motion-enter motion-stagger-1 w-[300px] shrink-0 border-r border-[var(--border)] bg-[var(--bg-surface)]">
 			<div className="border-b border-[var(--border)] px-5 py-4">
 				<div className="mb-4 flex items-center justify-between">
-					<h2 className="text-lg font-semibold text-[var(--text-primary)]">{headerTitle}</h2>
+					<div>
+						<h2 className="text-lg font-semibold tracking-tight text-[var(--text-primary)]">{headerTitle}</h2>
+						<p className="text-xs text-[var(--text-muted)]">{conversations.length} active conversations</p>
+					</div>
 					<button className="motion-interactive rounded-lg p-2 text-[var(--text-secondary)] hover:bg-[var(--bg-soft)] hover:text-[var(--text-primary)]" aria-label="filter messages">
 						<SlidersHorizontal size={17} />
 					</button>
@@ -119,17 +122,19 @@ export function RecentMessagesPanel({
 					<article
 						key={conversation.id}
 						onClick={() => onSelectConversation(conversation.id)}
-						className={`motion-interactive flex cursor-pointer gap-3 rounded-xl px-3 py-3 ${
-							conversation.id === selectedConversationId ? 'bg-[var(--accent-soft)]' : 'hover:bg-[var(--bg-soft)]'
+						className={`motion-interactive flex cursor-pointer gap-3 rounded-xl border px-3 py-3 ${
+							conversation.id === selectedConversationId
+								? 'border-[var(--accent)] bg-[var(--accent-soft)]'
+								: 'border-transparent hover:bg-[var(--bg-soft)]'
 						}`}
 					>
 						<div
 							className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-semibold text-white ${
 								conversation.isGroup
-									? 'bg-teal-600'
+									? 'bg-[var(--avatar-group-bg)]'
 									: conversation.id === selectedConversationId
-										? 'bg-[#1A2B5E]'
-										: 'bg-slate-400'
+										? 'bg-[var(--avatar-selected-bg)]'
+										: 'bg-[var(--avatar-neutral-bg)]'
 							}`}
 						>
 							{conversation.avatar}

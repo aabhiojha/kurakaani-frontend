@@ -37,8 +37,13 @@ export function SettingsPage({
 	return (
 		<section className="flex min-w-0 flex-1 overflow-y-auto bg-[var(--bg-surface-alt)] p-6 text-[var(--text-primary)]">
 			<div className="mx-auto w-full max-w-4xl space-y-6">
+				<div className="mb-1">
+					<p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">Workspace Preferences</p>
+					<h1 className="mt-1 text-2xl font-semibold tracking-tight">Settings</h1>
+				</div>
+
 				<div className="rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
-					<h2 className="text-lg font-semibold">OAuth Payload Import</h2>
+					<h2 className="text-lg font-semibold tracking-tight">OAuth Payload Import</h2>
 					<p className="mt-1 text-sm text-[var(--text-secondary)]">
 						If Google login opens a JSON page, paste that full JSON payload here and import it.
 					</p>
@@ -72,7 +77,7 @@ export function SettingsPage({
 				</div>
 
 				<div className="rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
-					<h2 className="text-lg font-semibold">Backend Connection</h2>
+					<h2 className="text-lg font-semibold tracking-tight">Backend Connection</h2>
 					<p className="mt-1 text-sm text-[var(--text-secondary)]">OAuth2 + JWT session status for API requests and WebSocket chat.</p>
 
 					<div className="mt-4 flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--bg-surface-alt)] p-4">
@@ -104,7 +109,7 @@ export function SettingsPage({
 				</div>
 
 				<div className="rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
-					<h1 className="text-2xl font-semibold">Settings</h1>
+					<h2 className="text-lg font-semibold tracking-tight">Appearance</h2>
 					<p className="mt-1 text-sm text-[var(--text-secondary)]">Control appearance and account preferences.</p>
 
 					<div className="mt-6 flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--bg-surface-alt)] p-4">
@@ -131,7 +136,7 @@ export function SettingsPage({
 				</div>
 
 				<div className="rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
-					<h2 className="text-lg font-semibold">Style Preview</h2>
+					<h2 className="text-lg font-semibold tracking-tight">Style Preview</h2>
 					<p className="mt-1 text-sm text-[var(--text-secondary)]">These elements follow your dark mode spec.</p>
 
 					<div className="mt-4 flex flex-wrap gap-2">

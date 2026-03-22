@@ -466,36 +466,38 @@ function App() {
 	}, [])
 
 	return (
-		<div data-theme={isDarkMode ? 'dark' : 'light'} className="flex h-screen min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)] antialiased">
-			<Sidebar activeView={activeView} onSectionChange={handleSectionChange} onNewChat={handleNewChat} />
-			{activeView === 'profile' ? (
-				<ProfilePage />
-			) : activeView === 'settings' ? (
-				<SettingsPage
-					themeMode={themeMode}
-					isDarkMode={isDarkMode}
-					onThemeModeChange={setThemeMode}
-					isAuthenticated={Boolean(session?.accessToken)}
-					sessionName={session?.user.name}
-					backendStatus={backendStatus}
-					onLogin={handleLogin}
-					onLogout={handleLogout}
-					onImportSessionPayload={handleImportSessionPayload}
-				/>
-			) : (
-				<>
-					<RecentMessagesPanel
-						section={activeSection}
-						conversations={activeConversations}
-						selectedConversationId={activeConversation.id}
-						onSelectConversation={setSelectedConversationId}
-						onCreateDirect={handleCreateDirect}
-						onCreateGroup={handleCreateGroup}
-						newChatTrigger={newChatTrigger}
+		<div data-theme={isDarkMode ? 'dark' : 'light'} className="h-screen min-h-screen bg-[var(--bg-page)] p-3 text-[var(--text-primary)] antialiased">
+			<div className="flex h-full overflow-hidden rounded-[30px] border border-[var(--border)] bg-[var(--bg-surface)] shadow-[var(--shadow-pane)]">
+				<Sidebar activeView={activeView} onSectionChange={handleSectionChange} onNewChat={handleNewChat} />
+				{activeView === 'profile' ? (
+					<ProfilePage />
+				) : activeView === 'settings' ? (
+					<SettingsPage
+						themeMode={themeMode}
+						isDarkMode={isDarkMode}
+						onThemeModeChange={setThemeMode}
+						isAuthenticated={Boolean(session?.accessToken)}
+						sessionName={session?.user.name}
+						backendStatus={backendStatus}
+						onLogin={handleLogin}
+						onLogout={handleLogout}
+						onImportSessionPayload={handleImportSessionPayload}
 					/>
-					<ChatView conversation={activeConversation} messages={activeMessages} onSendMessage={handleSendMessage} />
-				</>
-			)}
+				) : (
+					<>
+						<RecentMessagesPanel
+							section={activeSection}
+							conversations={activeConversations}
+							selectedConversationId={activeConversation.id}
+							onSelectConversation={setSelectedConversationId}
+							onCreateDirect={handleCreateDirect}
+							onCreateGroup={handleCreateGroup}
+							newChatTrigger={newChatTrigger}
+						/>
+						<ChatView conversation={activeConversation} messages={activeMessages} onSendMessage={handleSendMessage} />
+					</>
+				)}
+			</div>
 		</div>
 	)
 }

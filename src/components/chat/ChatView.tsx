@@ -74,18 +74,18 @@ export function ChatView({ conversation, messages, onSendMessage }: ChatViewProp
 		<section className="motion-enter motion-stagger-2 flex min-w-0 flex-1 flex-col bg-[var(--bg-surface)]">
 			<header className="flex items-center justify-between border-b border-[var(--border)] px-6 py-4">
 				<div className="flex items-center gap-3">
-					<div className={`h-11 w-11 overflow-hidden rounded-full text-center text-[15px] leading-[2.75rem] font-semibold text-white ${conversation.isGroup ? 'bg-teal-600' : 'bg-[var(--bubble-sent)]'}`}>
+					<div className={`h-11 w-11 overflow-hidden rounded-full text-center text-[15px] leading-[2.75rem] font-semibold text-white ${conversation.isGroup ? 'bg-[var(--avatar-group-bg)]' : 'bg-[var(--bubble-sent)]'}`}>
 						{conversation.avatar}
 					</div>
 					<div>
-						<h2 className="text-base font-semibold text-[var(--text-primary)]">{conversation.name}</h2>
-						<p className="text-xs tracking-wide text-[var(--text-secondary)]">{conversation.subtitle}</p>
+						<h2 className="text-[17px] font-semibold tracking-tight text-[var(--text-primary)]">{conversation.name}</h2>
+						<p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">{conversation.subtitle}</p>
 					</div>
 				</div>
 
 				<div className="flex items-center gap-6">
 					<nav className="flex items-center gap-4 text-sm">
-						<button className="motion-interactive border-b-2 border-[var(--accent)] pb-1 font-semibold text-[var(--accent)]">Messages</button>
+						<button className="motion-interactive rounded-full border border-[var(--accent)] bg-[var(--accent-soft)] px-3 py-1 font-semibold text-[var(--accent)]">Messages</button>
 						<button className="motion-interactive pb-1 font-medium text-[var(--text-secondary)]">Shared Files</button>
 						<button className="motion-interactive pb-1 font-medium text-[var(--text-secondary)]">Pinned</button>
 					</nav>
@@ -167,7 +167,7 @@ export function ChatView({ conversation, messages, onSendMessage }: ChatViewProp
 						</div>
 						<button
 							type="submit"
-							className="motion-interactive rounded-xl bg-[var(--accent)] p-2 text-[var(--bg-page)] shadow-[0_8px_18px_rgba(26,43,94,0.28)] hover:bg-[var(--accent-strong)]"
+							className="motion-interactive rounded-xl bg-[var(--accent)] p-2 text-[var(--bg-page)] shadow-[var(--shadow-accent)] hover:bg-[var(--accent-strong)]"
 							aria-label="send message"
 						>
 							<SendHorizontal size={17} />

@@ -2,7 +2,7 @@ import { Bell, Camera, Mail, MapPin, Phone, ShieldCheck } from 'lucide-react'
 
 export function ProfilePage() {
 	return (
-		<section className="motion-enter flex min-w-0 flex-1 bg-[var(--bg-surface-alt)] p-6 text-[var(--text-primary)]">
+		<section className="motion-enter flex min-w-0 flex-1 overflow-y-auto bg-[var(--bg-surface-alt)] p-6 text-[var(--text-primary)]">
 			<div className="mx-auto flex w-full max-w-5xl gap-6">
 				<div className="w-[320px] shrink-0 rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
 					<div className="relative mx-auto mb-4 h-24 w-24 overflow-hidden rounded-full bg-[var(--bubble-sent)] text-center text-2xl font-semibold leading-[6rem] text-white">
@@ -15,7 +15,7 @@ export function ProfilePage() {
 							<Camera size={14} />
 						</button>
 					</div>
-					<h1 className="text-center text-xl font-semibold text-[var(--text-primary)]">Yubraj Oli</h1>
+					<h1 className="text-center text-xl font-semibold tracking-tight text-[var(--text-primary)]">Yubraj Oli</h1>
 					<p className="mb-6 text-center text-sm text-[var(--text-secondary)]">Product Designer at Kurakaani</p>
 
 					<div className="space-y-3 rounded-2xl bg-[var(--bg-soft)] p-4 text-sm text-[var(--text-primary)]">
@@ -35,8 +35,9 @@ export function ProfilePage() {
 				</div>
 
 				<div className="min-w-0 flex-1 rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
+					<p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">Account</p>
 					<div className="mb-6 border-b border-[var(--border)] pb-4">
-						<h2 className="text-xl font-semibold text-[var(--text-primary)]">Profile Settings</h2>
+						<h2 className="mt-1 text-xl font-semibold tracking-tight text-[var(--text-primary)]">Profile Settings</h2>
 						<p className="mt-1 text-sm text-[var(--text-secondary)]">Manage your account details and communication preferences.</p>
 					</div>
 
@@ -75,7 +76,7 @@ export function ProfilePage() {
 								<Bell size={16} className="text-[var(--text-secondary)]" />
 								Message Notifications
 							</div>
-							<span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">Enabled</span>
+							<span className="rounded-full bg-[var(--success-bg)] px-2.5 py-1 text-xs font-semibold text-[var(--success-text)]">Enabled</span>
 						</div>
 						<div className="flex items-center justify-between text-sm">
 							<div className="flex items-center gap-2 text-[var(--text-primary)]">
@@ -90,7 +91,7 @@ export function ProfilePage() {
 						<button type="button" className="motion-interactive rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-soft)]">
 							Cancel
 						</button>
-						<button type="button" className="motion-interactive rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--bg-page)] shadow-[0_8px_18px_rgba(26,43,94,0.28)] hover:bg-[var(--accent-strong)]">
+						<button type="button" className="motion-interactive rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--bg-page)] shadow-[var(--shadow-accent)] hover:bg-[var(--accent-strong)]">
 							Save Changes
 						</button>
 					</div>

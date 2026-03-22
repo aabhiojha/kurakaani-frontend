@@ -31,7 +31,7 @@ export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext 
 				) : (
 					<div
 						className={`mt-5 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-[11px] font-semibold text-white ${
-							isRight ? 'bg-[var(--bubble-sent)]' : 'bg-[#505050]'
+							isRight ? 'bg-[var(--bubble-sent)]' : 'bg-[var(--avatar-neutral-bg)]'
 						}`}
 					>
 						{message.senderAvatar}
@@ -49,11 +49,9 @@ export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext 
 						>
 							<p>{message.text}</p>
 							{message.withImage && (
-								<div className="mt-3 overflow-hidden rounded-xl border border-white/20 bg-gradient-to-br from-teal-900 to-slate-900 p-3 shadow-inner">
-									<div className="relative h-36 overflow-hidden rounded-lg bg-gradient-to-br from-[#0d2c31] to-[#08151f]">
-										<div className="absolute -left-6 -top-6 h-24 w-24 rounded-full bg-teal-400/20 blur-2xl" />
-										<div className="absolute -bottom-8 right-1 h-28 w-28 rounded-full bg-cyan-400/15 blur-2xl" />
-										<div className="absolute left-1/2 top-1/2 h-24 w-44 -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md" />
+								<div className="mt-3 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] p-3">
+									<div className="flex h-36 items-center justify-center rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-surface)] text-xs font-medium text-[var(--text-muted)]">
+										Image attachment preview
 									</div>
 								</div>
 							)}
