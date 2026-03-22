@@ -1,21 +1,28 @@
 @import "tailwindcss";
 
 :root {
-	--bg-page: #f5f5f0;
-	--bg-surface: #ffffff;
-	--bg-surface-alt: #fafaf7;
-	--bg-soft: #f5f5f0;
-	--border: #e2e8f0;
-	--text-primary: #0f172a;
-	--text-secondary: #64748b;
-	--text-muted: #94a3b8;
-	--accent: #1a2b5e;
-	--accent-strong: #13214a;
-	--accent-soft: #f2f5ff;
+	--bg-page: #e8edf2;
+	--bg-surface: #f0f4f8;
+	--bg-surface-alt: #eef2f6;
+	--bg-soft: #f0f4f8;
+	--border: #d8dfe8;
+	--text-primary: #111111;
+	--text-secondary: #444444;
+	--text-muted: #777777;
+	--accent: #2563eb;
+	--accent-strong: #1d4ed8;
+	--accent-soft: #e8eefc;
 	--bubble-received: #eceff3;
-	--bubble-sent: #1a2b5e;
-	--pill-bg: #eef2ff;
-	--pill-text: #1a2b5e;
+	--bubble-sent: #2563eb;
+	--pill-bg: #f8fafc;
+	--pill-text: #333333;
+	--pill-border: #d0d8e4;
+	--resume-bg: #f0f4f8;
+	--resume-text: #111111;
+	--resume-border: #d0d8e4;
+	--toggle-bg: #f0f4f8;
+	--toggle-text: #111111;
+	--timeline-border: #cbd5e0;
 }
 
 [data-theme='dark'] {
@@ -34,6 +41,13 @@
 	--bubble-sent: #2a2a2a;
 	--pill-bg: #1e1e1e;
 	--pill-text: #cccccc;
+	--pill-border: #2e2e2e;
+	--resume-bg: #ffffff;
+	--resume-text: #0d0d0d;
+	--resume-border: #ffffff;
+	--toggle-bg: #1e1e1e;
+	--toggle-text: #ffffff;
+	--timeline-border: #2a2a2a;
 }
 
 body {

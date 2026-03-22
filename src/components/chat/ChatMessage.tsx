@@ -22,7 +22,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
 				<div
 					className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
 						isRight
-							? 'rounded-br-sm bg-[var(--bubble-sent)] text-[var(--text-primary)]'
+							? 'rounded-br-sm bg-[var(--bubble-sent)] text-white'
 							: 'rounded-bl-sm bg-[var(--bubble-received)] text-[var(--text-primary)]'
 					}`}
 				>
