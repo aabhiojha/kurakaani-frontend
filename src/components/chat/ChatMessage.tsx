@@ -12,18 +12,18 @@ export function ChatMessage({ message }: ChatMessageProps) {
 			<div className={`flex max-w-[80%] items-start gap-2 ${isRight ? 'flex-row-reverse' : 'flex-row'}`}>
 				<div
 					className={`mt-5 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-[11px] font-semibold text-white ${
-						isRight ? 'bg-[#1A2B5E]' : 'bg-slate-500'
+						isRight ? 'bg-[var(--bubble-sent)]' : 'bg-[#505050]'
 					}`}
 				>
 					{message.senderAvatar}
 				</div>
 				<div className={`${isRight ? 'items-end' : 'items-start'} flex flex-col`}>
-					<span className="mb-1 px-1 text-xs font-medium text-slate-500">{message.senderName}</span>
+					<span className="mb-1 px-1 text-xs font-medium text-[var(--text-secondary)]">{message.senderName}</span>
 				<div
 					className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
 						isRight
-							? 'rounded-br-sm bg-[#1A2B5E] text-white'
-							: 'rounded-bl-sm bg-[#ECEFF3] text-slate-700'
+							? 'rounded-br-sm bg-[var(--bubble-sent)] text-[var(--text-primary)]'
+							: 'rounded-bl-sm bg-[var(--bubble-received)] text-[var(--text-primary)]'
 					}`}
 				>
 					<p>{message.text}</p>
@@ -37,7 +37,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
 						</div>
 					)}
 				</div>
-					<span className="mt-1 px-1 text-xs text-slate-400">{message.timestamp}</span>
+					<span className="mt-1 px-1 text-xs text-[var(--text-muted)]">{message.timestamp}</span>
 				</div>
 			</div>
 		</div>

@@ -13,20 +13,20 @@ export function RecentMessagesPanel({ section, conversations, selectedConversati
 	const searchPlaceholder = section === 'groups' ? 'Search groups...' : 'Search discussions...'
 
 	return (
-		<section className="w-[300px] shrink-0 border-r border-slate-200 bg-white">
-			<div className="border-b border-slate-100 px-5 py-4">
+		<section className="w-[300px] shrink-0 border-r border-[var(--border)] bg-[var(--bg-surface)]">
+			<div className="border-b border-[var(--border)] px-5 py-4">
 				<div className="mb-4 flex items-center justify-between">
-					<h2 className="text-lg font-semibold text-slate-900">{headerTitle}</h2>
-					<button className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700" aria-label="filter messages">
+					<h2 className="text-lg font-semibold text-[var(--text-primary)]">{headerTitle}</h2>
+					<button className="rounded-lg p-2 text-[var(--text-secondary)] transition hover:bg-[var(--bg-soft)] hover:text-[var(--text-primary)]" aria-label="filter messages">
 						<SlidersHorizontal size={17} />
 					</button>
 				</div>
 				<label className="relative block">
-					<Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+					<Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
 					<input
 						type="text"
 						placeholder={searchPlaceholder}
-						className="w-full rounded-xl border border-slate-200 bg-[#F5F5F0] py-2.5 pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-[#1A2B5E] focus:outline-none"
+						className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] py-2.5 pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
 					/>
 				</label>
 			</div>
@@ -37,7 +37,7 @@ export function RecentMessagesPanel({ section, conversations, selectedConversati
 						key={conversation.id}
 						onClick={() => onSelectConversation(conversation.id)}
 						className={`flex cursor-pointer gap-3 rounded-xl px-3 py-3 transition ${
-							conversation.id === selectedConversationId ? 'bg-[#F2F5FF]' : 'hover:bg-slate-50'
+							conversation.id === selectedConversationId ? 'bg-[var(--accent-soft)]' : 'hover:bg-[var(--bg-soft)]'
 						}`}
 					>
 						<div
@@ -53,10 +53,10 @@ export function RecentMessagesPanel({ section, conversations, selectedConversati
 						</div>
 						<div className="min-w-0 flex-1">
 							<div className="mb-0.5 flex items-center justify-between gap-2">
-								<h3 className="truncate text-sm font-semibold text-slate-900">{conversation.name}</h3>
-								<span className="shrink-0 text-xs text-slate-400">{conversation.time}</span>
+								<h3 className="truncate text-sm font-semibold text-[var(--text-primary)]">{conversation.name}</h3>
+								<span className="shrink-0 text-xs text-[var(--text-muted)]">{conversation.time}</span>
 							</div>
-							<p className="truncate text-sm text-slate-500">{conversation.preview}</p>
+							<p className="truncate text-sm text-[var(--text-secondary)]">{conversation.preview}</p>
 						</div>
 					</article>
 				))}

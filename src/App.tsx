@@ -2,16 +2,20 @@ import { useMemo, useState } from 'react'
 import { ChatView } from './components/chat/ChatView'
 import { ProfilePage } from './components/layout/ProfilePage'
 import { RecentMessagesPanel } from './components/layout/RecentMessagesPanel'
+import { SettingsPage } from './components/layout/SettingsPage'
 import { Sidebar } from './components/layout/Sidebar'
 import type { SidebarView } from './components/layout/Sidebar'
 import { conversationMessages, conversationsBySection } from './data/chatData'
 import type { ChatSection, Message } from './types/chat'
 
+const isChatSection = (view: SidebarView): view is ChatSection => view === 'direct' || view === 'groups'
+
 function App() {
 	const [activeView, setActiveView] = useState<SidebarView>('direct')
+	const [isDarkMode, setIsDarkMode] = useState(false)
 	const [messagesByConversation, setMessagesByConversation] = useState<Record<number, Message[]>>(conversationMessages)
 	const [selectedConversationId, setSelectedConversationId] = useState<number>(conversationsBySection.direct[0].id)
-	const activeSection: ChatSection = activeView === 'profile' ? 'direct' : activeView
+	const activeSection: ChatSection = isChatSection(activeView) ? activeView : 'direct'
 
 	const activeConversations = conversationsBySection[activeSection]
 
@@ -24,7 +28,7 @@ function App() {
 
 	const handleSectionChange = (section: SidebarView) => {
 		setActiveView(section)
-		if (section !== 'profile') {
+		if (isChatSection(section)) {
 			setSelectedConversationId(conversationsBySection[section][0].id)
 		}
 	}
@@ -55,10 +59,12 @@ function App() {
 	}
 
 	return (
-		<div className="flex h-screen min-h-screen bg-[#F5F5F0] text-slate-900 antialiased">
+		<div data-theme={isDarkMode ? 'dark' : 'light'} className="flex h-screen min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)] antialiased">
 			<Sidebar activeView={activeView} onSectionChange={handleSectionChange} />
 			{activeView === 'profile' ? (
 				<ProfilePage />
+			) : activeView === 'settings' ? (
+				<SettingsPage isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode((prev) => !prev)} />
 			) : (
 				<>
 					<RecentMessagesPanel
