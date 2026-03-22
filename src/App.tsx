@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { LayoutPanelLeft, MessageSquare, MessagesSquare, PanelLeftClose } from 'lucide-react'
 import { ChatView } from './components/chat/ChatView'
 import { ProfilePage } from './components/layout/ProfilePage'
 import { RecentMessagesPanel } from './components/layout/RecentMessagesPanel'
@@ -10,7 +11,7 @@ import { getSession } from './lib/session'
 import { getPublicAuthInfo, logout, parseSessionFromCallbackUrl, saveSession, startGoogleLogin } from './services/authService'
 import { ChatSocketService } from './services/chatSocketService'
 import { createRoom } from './services/roomService'
-import type { OAuthSuccessResponse, SessionState } from './types/api/session'
+import type { SessionState } from './types/api/session'
 import type { ChatSection, Conversation, Message } from './types/chat'
 
 const isChatSection = (view: SidebarView): view is ChatSection => view === 'direct' || view === 'groups'
@@ -20,6 +21,7 @@ const SELECTED_CONVERSATION_STORAGE_KEY = 'kurakaani-selected-conversation-id'
 const CONVERSATIONS_STATE_STORAGE_KEY = 'kurakaani-conversations-state'
 const MESSAGES_STATE_STORAGE_KEY = 'kurakaani-messages-state'
 type ThemeMode = 'light' | 'dark' | 'system'
+type MobilePane = 'sidebar' | 'list' | 'detail'
 
 const isSidebarView = (value: string | null): value is SidebarView => {
 	return value === 'direct' || value === 'groups' || value === 'settings' || value === 'profile'
@@ -106,9 +108,16 @@ function App() {
 		return Number.isNaN(saved) ? conversationsBySection.direct[0].id : saved
 	})
 	const [newChatTrigger, setNewChatTrigger] = useState(0)
+	const [viewportWidth, setViewportWidth] = useState(() => (typeof window === 'undefined' ? 1280 : window.innerWidth))
+	const [mobilePane, setMobilePane] = useState<MobilePane>('detail')
+	const [isSidebarDrawerOpen, setIsSidebarDrawerOpen] = useState(false)
+	const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false)
 	const chatSocketRef = useRef<ChatSocketService>(new ChatSocketService())
 	const activeSection: ChatSection = isChatSection(activeView) ? activeView : 'direct'
  	const isDarkMode = themeMode === 'system' ? systemPrefersDark : themeMode === 'dark'
+	const isMobile = viewportWidth < 768
+	const isTablet = viewportWidth >= 768 && viewportWidth < 1024
+	const isDesktop = viewportWidth >= 1024
 
 	const activeConversations = conversationsState[activeSection]
 
@@ -123,13 +132,31 @@ function App() {
 		setActiveView(section)
 		if (isChatSection(section)) {
 			setSelectedConversationId((previous) => conversationsState[section][0]?.id ?? previous)
+			if (isMobile) {
+				setMobilePane('list')
+			}
+		} else if (isMobile) {
+			setMobilePane('detail')
 		}
+
+		setIsSidebarDrawerOpen(false)
 	}
 
 	const handleNewChat = (section: ChatSection) => {
 		setActiveView(section)
 		setSelectedConversationId((previous) => conversationsState[section][0]?.id ?? previous)
 		setNewChatTrigger((previous) => previous + 1)
+		if (isMobile) {
+			setMobilePane('list')
+		}
+		setIsSidebarDrawerOpen(false)
+	}
+
+	const handleSelectConversation = (conversationId: number) => {
+		setSelectedConversationId(conversationId)
+		if (isMobile) {
+			setMobilePane('detail')
+		}
 	}
 
 	const createGroupConversation = (roomId: number, name: string, description: string) => {
@@ -307,36 +334,6 @@ function App() {
 		setBackendStatus('Logged out. API requests now run without JWT.')
 	}
 
-	const handleImportSessionPayload = (payloadText: string) => {
-		try {
-			const parsed = JSON.parse(payloadText) as OAuthSuccessResponse
-
-			const isValidPayload =
-				typeof parsed.accessToken === 'string' &&
-				typeof parsed.expiresAt === 'string' &&
-				typeof parsed.user?.id === 'number' &&
-				typeof parsed.user?.email === 'string' &&
-				typeof parsed.user?.name === 'string' &&
-				Array.isArray(parsed.user?.roles)
-
-			if (!isValidPayload) {
-				return { ok: false as const, error: 'Invalid OAuth JSON shape.' }
-			}
-
-			saveSession(parsed)
-			setSession({
-				accessToken: parsed.accessToken,
-				expiresAt: parsed.expiresAt,
-				user: parsed.user,
-			})
-			setBackendStatus('Session imported successfully. Authenticated API and WebSocket enabled.')
-
-			return { ok: true as const }
-		} catch {
-			return { ok: false as const, error: 'Failed to parse JSON payload.' }
-		}
-	}
-
 	useEffect(() => {
 		window.localStorage.setItem(THEME_STORAGE_KEY, themeMode)
 	}, [themeMode])
@@ -451,6 +448,37 @@ function App() {
 	}, [activeConversation.avatar, activeConversation.id, activeConversation.name, activeView, session?.accessToken])
 
 	useEffect(() => {
+		const handleResize = () => {
+			setViewportWidth(window.innerWidth)
+		}
+
+		window.addEventListener('resize', handleResize)
+		return () => {
+			window.removeEventListener('resize', handleResize)
+		}
+	}, [])
+
+	useEffect(() => {
+		if (!isMobile) {
+			setMobilePane('detail')
+		}
+
+		if (isDesktop) {
+			setIsSidebarDrawerOpen(false)
+		}
+
+		if (!isDesktop) {
+			setIsDesktopSidebarCollapsed(false)
+		}
+	}, [isDesktop, isMobile])
+
+	useEffect(() => {
+		if (!isChatSection(activeView) && isMobile) {
+			setMobilePane('detail')
+		}
+	}, [activeView, isMobile])
+
+	useEffect(() => {
 		const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
 
 		const handleChange = (event: MediaQueryListEvent) => {
@@ -465,38 +493,169 @@ function App() {
 		}
 	}, [])
 
-	return (
-		<div data-theme={isDarkMode ? 'dark' : 'light'} className="h-screen min-h-screen bg-[var(--bg-page)] p-3 text-[var(--text-primary)] antialiased">
-			<div className="flex h-full overflow-hidden rounded-[30px] border border-[var(--border)] bg-[var(--bg-surface)] shadow-[var(--shadow-pane)]">
-				<Sidebar activeView={activeView} onSectionChange={handleSectionChange} onNewChat={handleNewChat} />
-				{activeView === 'profile' ? (
-					<ProfilePage />
-				) : activeView === 'settings' ? (
-					<SettingsPage
-						themeMode={themeMode}
-						isDarkMode={isDarkMode}
-						onThemeModeChange={setThemeMode}
-						isAuthenticated={Boolean(session?.accessToken)}
-						sessionName={session?.user.name}
-						backendStatus={backendStatus}
-						onLogin={handleLogin}
-						onLogout={handleLogout}
-						onImportSessionPayload={handleImportSessionPayload}
+	const renderMainContent = () => {
+		if (activeView === 'profile') {
+			return <ProfilePage />
+		}
+
+		if (activeView === 'settings') {
+			return (
+				<SettingsPage
+					themeMode={themeMode}
+					isDarkMode={isDarkMode}
+					onThemeModeChange={setThemeMode}
+					isAuthenticated={Boolean(session?.accessToken)}
+					sessionName={session?.user.name}
+					backendStatus={backendStatus}
+					onLogin={handleLogin}
+					onLogout={handleLogout}
+				/>
+			)
+		}
+
+		if (isMobile) {
+			if (mobilePane === 'sidebar') {
+				return (
+					<Sidebar
+						activeView={activeView}
+						onSectionChange={handleSectionChange}
+						onNewChat={handleNewChat}
+						className="h-full w-full max-w-none border-r-0"
 					/>
-				) : (
-					<>
-						<RecentMessagesPanel
-							section={activeSection}
-							conversations={activeConversations}
-							selectedConversationId={activeConversation.id}
-							onSelectConversation={setSelectedConversationId}
-							onCreateDirect={handleCreateDirect}
-							onCreateGroup={handleCreateGroup}
-							newChatTrigger={newChatTrigger}
-						/>
-						<ChatView conversation={activeConversation} messages={activeMessages} onSendMessage={handleSendMessage} />
-					</>
+				)
+			}
+
+			if (mobilePane === 'list') {
+				return (
+					<RecentMessagesPanel
+						section={activeSection}
+						conversations={activeConversations}
+						selectedConversationId={activeConversation.id}
+						onSelectConversation={handleSelectConversation}
+						onCreateDirect={handleCreateDirect}
+						onCreateGroup={handleCreateGroup}
+						newChatTrigger={newChatTrigger}
+						className="h-full w-full max-w-none border-r-0"
+					/>
+				)
+			}
+
+			return <ChatView conversation={activeConversation} messages={activeMessages} onSendMessage={handleSendMessage} />
+		}
+
+		if (isTablet) {
+			return (
+				<>
+					<RecentMessagesPanel
+						section={activeSection}
+						conversations={activeConversations}
+						selectedConversationId={activeConversation.id}
+						onSelectConversation={handleSelectConversation}
+						onCreateDirect={handleCreateDirect}
+						onCreateGroup={handleCreateGroup}
+						newChatTrigger={newChatTrigger}
+						className="h-full"
+					/>
+					<ChatView conversation={activeConversation} messages={activeMessages} onSendMessage={handleSendMessage} />
+				</>
+			)
+		}
+
+		return (
+			<>
+				<RecentMessagesPanel
+					section={activeSection}
+					conversations={activeConversations}
+					selectedConversationId={activeConversation.id}
+					onSelectConversation={handleSelectConversation}
+					onCreateDirect={handleCreateDirect}
+					onCreateGroup={handleCreateGroup}
+					newChatTrigger={newChatTrigger}
+					className="h-full"
+				/>
+				<ChatView conversation={activeConversation} messages={activeMessages} onSendMessage={handleSendMessage} />
+			</>
+		)
+	}
+
+	return (
+		<div data-theme={isDarkMode ? 'dark' : 'light'} className="h-screen min-h-screen overflow-hidden bg-[var(--bg-page)] p-0 text-[var(--text-primary)] antialiased sm:p-2 lg:p-3">
+			<div className="relative flex h-full min-w-0 overflow-hidden rounded-none border border-[var(--border)] bg-[var(--bg-surface)] shadow-[var(--shadow-pane)] sm:rounded-[26px]">
+				{isDesktop && !isDesktopSidebarCollapsed && (
+					<Sidebar
+						activeView={activeView}
+						onSectionChange={handleSectionChange}
+						onNewChat={handleNewChat}
+						className="h-full"
+						onToggleCollapse={() => setIsDesktopSidebarCollapsed(true)}
+						showCollapseButton
+					/>
 				)}
+
+				{isDesktop && isDesktopSidebarCollapsed && (
+					<button
+						type="button"
+						onClick={() => setIsDesktopSidebarCollapsed(false)}
+						className="motion-interactive absolute left-4 top-4 z-30 inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] px-3 text-sm font-medium text-[var(--text-primary)] shadow-sm"
+						aria-label="expand sidebar"
+					>
+						<LayoutPanelLeft size={16} />
+						Menu
+					</button>
+				)}
+
+				{!isDesktop && isSidebarDrawerOpen && (
+					<div className="absolute inset-0 z-40 bg-black/35" onClick={() => setIsSidebarDrawerOpen(false)}>
+						<div className="h-full w-fit" onClick={(event) => event.stopPropagation()}>
+							<Sidebar
+								activeView={activeView}
+								onSectionChange={handleSectionChange}
+								onNewChat={handleNewChat}
+								className="h-full max-w-[84vw] bg-[var(--bg-soft)]"
+							/>
+						</div>
+					</div>
+				)}
+
+				<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+					{!isDesktop && (
+						<header className="flex min-h-12 items-center justify-between border-b border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 sm:px-4">
+							<button
+								type="button"
+								onClick={() => setIsSidebarDrawerOpen((previous) => !previous)}
+								className="motion-interactive inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 text-sm font-medium text-[var(--text-primary)]"
+							>
+								{isSidebarDrawerOpen ? <PanelLeftClose size={16} /> : <LayoutPanelLeft size={16} />}
+								Menu
+							</button>
+
+							{isMobile && isChatSection(activeView) && (
+								<div className="flex items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] p-1">
+									<button
+										type="button"
+										onClick={() => setMobilePane('list')}
+										className={`motion-interactive inline-flex min-h-10 items-center gap-1 rounded-lg px-2 text-xs font-semibold ${mobilePane === 'list' ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}
+									>
+										<MessagesSquare size={14} />
+										Chats
+									</button>
+									<button
+										type="button"
+										onClick={() => setMobilePane('detail')}
+										className={`motion-interactive inline-flex min-h-10 items-center gap-1 rounded-lg px-2 text-xs font-semibold ${mobilePane === 'detail' ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}
+									>
+										<MessageSquare size={14} />
+										Chat
+									</button>
+								</div>
+							)}
+
+							<div className="w-[52px]" />
+						</header>
+					)}
+
+					<div className="min-h-0 flex flex-1 min-w-0 overflow-hidden">{renderMainContent()}</div>
+				</div>
 			</div>
 		</div>
 	)

@@ -2,9 +2,9 @@ import { Bell, Camera, Mail, MapPin, Phone, ShieldCheck } from 'lucide-react'
 
 export function ProfilePage() {
 	return (
-		<section className="motion-enter flex min-w-0 flex-1 overflow-y-auto bg-[var(--bg-surface-alt)] p-6 text-[var(--text-primary)]">
-			<div className="mx-auto flex w-full max-w-5xl gap-6">
-				<div className="w-[320px] shrink-0 rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
+		<section className="motion-enter flex min-w-0 flex-1 overflow-y-auto bg-[var(--bg-surface-alt)] p-3 text-[var(--text-primary)] sm:p-4 lg:p-6">
+			<div className="mx-auto flex w-full max-w-5xl flex-col gap-4 lg:gap-6 xl:flex-row">
+				<div className="w-full shrink-0 rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-5 shadow-sm sm:p-6 xl:w-[320px]">
 					<div className="relative mx-auto mb-4 h-24 w-24 overflow-hidden rounded-full bg-[var(--bubble-sent)] text-center text-2xl font-semibold leading-[6rem] text-white">
 						YO
 						<button
@@ -34,7 +34,7 @@ export function ProfilePage() {
 					</div>
 				</div>
 
-				<div className="min-w-0 flex-1 rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-sm">
+				<div className="min-w-0 flex-1 rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-5 shadow-sm sm:p-6">
 					<p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">Account</p>
 					<div className="mb-6 border-b border-[var(--border)] pb-4">
 						<h2 className="mt-1 text-xl font-semibold tracking-tight text-[var(--text-primary)]">Profile Settings</h2>

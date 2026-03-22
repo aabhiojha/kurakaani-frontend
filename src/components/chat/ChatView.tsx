@@ -72,24 +72,24 @@ export function ChatView({ conversation, messages, onSendMessage }: ChatViewProp
 
 	return (
 		<section className="motion-enter motion-stagger-2 flex min-w-0 flex-1 flex-col bg-[var(--bg-surface)]">
-			<header className="flex items-center justify-between border-b border-[var(--border)] px-6 py-4">
+			<header className="flex items-center justify-between border-b border-[var(--border)] px-3 py-3 sm:px-5 lg:px-6">
 				<div className="flex items-center gap-3">
 					<div className={`h-11 w-11 overflow-hidden rounded-full text-center text-[15px] leading-[2.75rem] font-semibold text-white ${conversation.isGroup ? 'bg-[var(--avatar-group-bg)]' : 'bg-[var(--bubble-sent)]'}`}>
 						{conversation.avatar}
 					</div>
 					<div>
-						<h2 className="text-[17px] font-semibold tracking-tight text-[var(--text-primary)]">{conversation.name}</h2>
+						<h2 className="max-w-[46vw] truncate text-[15px] font-semibold tracking-tight text-[var(--text-primary)] sm:max-w-none sm:text-[17px]">{conversation.name}</h2>
 						<p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">{conversation.subtitle}</p>
 					</div>
 				</div>
 
-				<div className="flex items-center gap-6">
-					<nav className="flex items-center gap-4 text-sm">
+				<div className="flex items-center gap-2 sm:gap-4 lg:gap-6">
+					<nav className="hidden items-center gap-3 text-sm md:flex lg:gap-4">
 						<button className="motion-interactive rounded-full border border-[var(--accent)] bg-[var(--accent-soft)] px-3 py-1 font-semibold text-[var(--accent)]">Messages</button>
 						<button className="motion-interactive pb-1 font-medium text-[var(--text-secondary)]">Shared Files</button>
 						<button className="motion-interactive pb-1 font-medium text-[var(--text-secondary)]">Pinned</button>
 					</nav>
-					<div className="flex items-center gap-2 text-[var(--text-secondary)]">
+					<div className="flex items-center gap-1 text-[var(--text-secondary)] sm:gap-2">
 						<button className="motion-interactive rounded-lg p-2 hover:bg-[var(--bg-soft)] hover:text-[var(--text-primary)]" aria-label="search in conversation">
 							<Search size={18} />
 						</button>
@@ -100,7 +100,7 @@ export function ChatView({ conversation, messages, onSendMessage }: ChatViewProp
 				</div>
 			</header>
 
-			<div ref={messagesContainerRef} className="flex-1 overflow-y-auto bg-[var(--bg-surface-alt)] px-8 py-6">
+			<div ref={messagesContainerRef} className="flex-1 overflow-y-auto bg-[var(--bg-surface-alt)] px-3 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6">
 				<div className="mb-7 flex items-center gap-3">
 					<div className="h-px flex-1 bg-[var(--border)]" />
 					<span className="text-xs font-medium tracking-[0.1em] text-[var(--text-muted)]">OCTOBER 24, 2023</span>
@@ -119,13 +119,13 @@ export function ChatView({ conversation, messages, onSendMessage }: ChatViewProp
 				</div>
 			</div>
 
-			<form onSubmit={onSubmit} className="border-t border-[var(--border)] bg-[var(--bg-surface)] px-6 py-4">
+			<form onSubmit={onSubmit} className="border-t border-[var(--border)] bg-[var(--bg-surface)] px-3 py-3 sm:px-5 sm:py-4 lg:px-6">
 				<div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-soft)] p-2 shadow-sm">
 					<div className="flex items-center gap-1">
-						<button type="button" className="motion-interactive rounded-xl p-2 text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] hover:text-[var(--accent)]" aria-label="add">
+						<button type="button" className="motion-interactive inline-flex min-h-11 items-center rounded-xl p-2 text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] hover:text-[var(--accent)]" aria-label="add">
 							<Plus size={18} />
 						</button>
-						<button type="button" className="motion-interactive rounded-xl p-2 text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] hover:text-[var(--accent)]" aria-label="upload image">
+						<button type="button" className="motion-interactive inline-flex min-h-11 items-center rounded-xl p-2 text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] hover:text-[var(--accent)]" aria-label="upload image">
 							<ImageIcon size={18} />
 						</button>
 
@@ -135,20 +135,20 @@ export function ChatView({ conversation, messages, onSendMessage }: ChatViewProp
 							onKeyDown={onKeyDown}
 							rows={1}
 							placeholder={`Type your message to ${conversation.name}…`}
-							className="motion-focus min-h-[40px] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
+							className="motion-focus min-h-11 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
 						/>
 
 						<div ref={emojiPickerRef} className="relative">
 							<button
 								type="button"
 								onClick={() => setIsEmojiOpen((prev) => !prev)}
-								className="motion-interactive rounded-xl p-2 text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] hover:text-[var(--accent)]"
+								className="motion-interactive inline-flex min-h-11 items-center rounded-xl p-2 text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] hover:text-[var(--accent)]"
 								aria-label="emoji"
 							>
 								<Smile size={18} />
 							</button>
 							{isEmojiOpen && (
-								<div className="motion-popover absolute bottom-12 right-0 z-20 w-52 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-2 shadow-lg">
+								<div className="motion-popover absolute bottom-12 right-0 z-20 w-52 max-w-[calc(100vw-2rem)] rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-2 shadow-lg">
 									<div className="grid grid-cols-4 gap-1">
 										{emojiOptions.map((emoji) => (
 											<button
@@ -167,7 +167,7 @@ export function ChatView({ conversation, messages, onSendMessage }: ChatViewProp
 						</div>
 						<button
 							type="submit"
-							className="motion-interactive rounded-xl bg-[var(--accent)] p-2 text-[var(--bg-page)] shadow-[var(--shadow-accent)] hover:bg-[var(--accent-strong)]"
+							className="motion-interactive inline-flex min-h-11 items-center rounded-xl bg-[var(--accent)] p-2 text-[var(--bg-page)] shadow-[var(--shadow-accent)] hover:bg-[var(--accent-strong)]"
 							aria-label="send message"
 						>
 							<SendHorizontal size={17} />

@@ -11,6 +11,7 @@ type RecentMessagesPanelProps = {
 	onCreateDirect: (name: string, description: string) => Promise<{ ok: boolean; error?: string }>
 	onCreateGroup: (name: string, description: string) => Promise<{ ok: boolean; error?: string }>
 	newChatTrigger: number
+	className?: string
 }
 
 export function RecentMessagesPanel({
@@ -21,6 +22,7 @@ export function RecentMessagesPanel({
 	onCreateDirect,
 	onCreateGroup,
 	newChatTrigger,
+	className = '',
 }: RecentMessagesPanelProps) {
 	const [createName, setCreateName] = useState('')
 	const [createDescription, setCreateDescription] = useState('')
@@ -64,8 +66,8 @@ export function RecentMessagesPanel({
 	}
 
 	return (
-		<section className="motion-enter motion-stagger-1 w-[300px] shrink-0 border-r border-[var(--border)] bg-[var(--bg-surface)]">
-			<div className="border-b border-[var(--border)] px-5 py-4">
+		<section className={`motion-enter motion-stagger-1 w-full min-w-0 shrink-0 border-r border-[var(--border)] bg-[var(--bg-surface)] md:w-[340px] lg:w-[320px] ${className}`}>
+			<div className="border-b border-[var(--border)] px-4 py-4 sm:px-5">
 				<div className="mb-4 flex items-center justify-between">
 					<div>
 						<h2 className="text-lg font-semibold tracking-tight text-[var(--text-primary)]">{headerTitle}</h2>
@@ -122,7 +124,7 @@ export function RecentMessagesPanel({
 					<article
 						key={conversation.id}
 						onClick={() => onSelectConversation(conversation.id)}
-						className={`motion-interactive flex cursor-pointer gap-3 rounded-xl border px-3 py-3 ${
+						className={`motion-interactive flex min-h-11 cursor-pointer gap-3 rounded-xl border px-3 py-3 ${
 							conversation.id === selectedConversationId
 								? 'border-[var(--accent)] bg-[var(--accent-soft)]'
 								: 'border-transparent hover:bg-[var(--bg-soft)]'

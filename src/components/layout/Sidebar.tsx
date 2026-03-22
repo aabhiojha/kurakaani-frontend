@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { MessageSquare, Plus, Settings, UserCircle, Users } from 'lucide-react'
+import { MessageSquare, PanelLeftClose, Plus, Settings, UserCircle, Users } from 'lucide-react'
 import type { ChatSection } from '../../types/chat'
 
 export type SidebarView = ChatSection | 'profile' | 'settings'
@@ -8,9 +8,19 @@ type SidebarProps = {
 	activeView: SidebarView
 	onSectionChange: (section: SidebarView) => void
 	onNewChat: (section: ChatSection) => void
+	className?: string
+	onToggleCollapse?: () => void
+	showCollapseButton?: boolean
 }
 
-export function Sidebar({ activeView, onSectionChange, onNewChat }: SidebarProps) {
+export function Sidebar({
+	activeView,
+	onSectionChange,
+	onNewChat,
+	className = '',
+	onToggleCollapse,
+	showCollapseButton = false,
+}: SidebarProps) {
 	const [isNewChatMenuOpen, setIsNewChatMenuOpen] = useState(false)
 	const newChatMenuRef = useRef<HTMLDivElement | null>(null)
 
@@ -50,12 +60,24 @@ export function Sidebar({ activeView, onSectionChange, onNewChat }: SidebarProps
 	}
 
 	return (
-		<aside className="motion-enter w-[248px] shrink-0 border-r border-[var(--border)] bg-[var(--bg-soft)] px-4 py-5">
+		<aside className={`motion-enter w-full shrink-0 border-r border-[var(--border)] bg-[var(--bg-soft)] px-4 py-5 md:w-[280px] lg:w-[248px] ${className}`}>
 			<div className="flex h-full flex-col">
 				<div className="mb-7 px-1">
-					<div className="flex items-center gap-2">
-						<div className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">Kurakaani</div>
-					<span className="h-2.5 w-2.5 rounded-full bg-[var(--status-online)]" aria-label="online" />
+					<div className="flex items-center justify-between gap-2">
+						<div className="flex items-center gap-2">
+							<div className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">Kurakaani</div>
+							<span className="h-2.5 w-2.5 rounded-full bg-[var(--status-online)]" aria-label="online" />
+						</div>
+						{showCollapseButton && onToggleCollapse && (
+							<button
+								type="button"
+								onClick={onToggleCollapse}
+								className="motion-interactive inline-flex min-h-11 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] px-3 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+								aria-label="collapse sidebar"
+							>
+								<PanelLeftClose size={16} />
+							</button>
+						)}
 					</div>
 					<p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">Private Workspace</p>
 				</div>
@@ -64,7 +86,7 @@ export function Sidebar({ activeView, onSectionChange, onNewChat }: SidebarProps
 				<nav className="space-y-2">
 					<button
 						onClick={() => onSectionChange('groups')}
-						className={`motion-interactive flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${
+						className={`motion-interactive flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${
 							activeView === 'groups'
 								? 'bg-[var(--bg-surface)] font-semibold text-[var(--text-primary)] shadow-sm'
 								: 'font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
@@ -75,7 +97,7 @@ export function Sidebar({ activeView, onSectionChange, onNewChat }: SidebarProps
 					</button>
 					<button
 						onClick={() => onSectionChange('direct')}
-						className={`motion-interactive flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${
+						className={`motion-interactive flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${
 							activeView === 'direct'
 								? 'bg-[var(--bg-surface)] font-semibold text-[var(--text-primary)] shadow-sm'
 								: 'font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
@@ -86,7 +108,7 @@ export function Sidebar({ activeView, onSectionChange, onNewChat }: SidebarProps
 					</button>
 					<button
 						onClick={() => onSectionChange('settings')}
-						className={`motion-interactive flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${
+						className={`motion-interactive flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${
 							activeView === 'settings'
 								? 'bg-[var(--bg-surface)] font-semibold text-[var(--text-primary)] shadow-sm'
 								: 'font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
@@ -97,7 +119,7 @@ export function Sidebar({ activeView, onSectionChange, onNewChat }: SidebarProps
 					</button>
 					<button
 						onClick={() => onSectionChange('profile')}
-						className={`motion-interactive flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${
+						className={`motion-interactive flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${
 							activeView === 'profile'
 								? 'bg-[var(--bg-surface)] font-semibold text-[var(--text-primary)] shadow-sm'
 								: 'font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
@@ -132,7 +154,7 @@ export function Sidebar({ activeView, onSectionChange, onNewChat }: SidebarProps
 						)}
 						<button
 							onClick={() => setIsNewChatMenuOpen((previous) => !previous)}
-							className="motion-interactive flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[var(--bg-page)] shadow-[var(--shadow-accent)] hover:bg-[var(--accent-strong)]"
+							className="motion-interactive flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[var(--bg-page)] shadow-[var(--shadow-accent)] hover:bg-[var(--accent-strong)]"
 						>
 							<Plus size={17} />
 							New Chat
