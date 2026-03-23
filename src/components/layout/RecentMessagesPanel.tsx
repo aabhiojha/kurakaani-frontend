@@ -6,7 +6,7 @@ import type { ChatSection, Conversation } from '../../types/chat'
 type RecentMessagesPanelProps = {
 	section: ChatSection
 	conversations: Conversation[]
-	selectedConversationId: number
+	selectedConversationId: number | null
 	onSelectConversation: (conversationId: number) => void
 	onCreateDirect: (name: string, description: string) => Promise<{ ok: boolean; error?: string }>
 	onCreateGroup: (name: string, description: string) => Promise<{ ok: boolean; error?: string }>

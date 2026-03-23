@@ -7,20 +7,34 @@ export type SessionUser = {
 
 export type SessionState = {
 	accessToken: string
-	expiresAt: string
 	user: SessionUser
 }
 
-export type OAuthSuccessResponse = {
-	tokenType: 'Bearer'
-	accessToken: string
-	expiresAt: string
-	user: SessionUser
+export type LoginRequest = {
+	username: string
+	password: string
 }
 
-export type PublicAuthResponse = {
-	message: string
-	loginUrl: string
+export type RegisterRequest = {
+	username: string
+	password: string
+	email: string
+}
+
+export type LoginResponse = {
+	token: string
+	username: string
+	roles: string[]
+}
+
+export type CurrentUserResponse = {
+	id: number
+	userName: string
+	email: string
+	enabled: boolean
+	roles: string[]
+	createdAt: string
+	updatedAt: string
 }
 
 export type ApiError = {

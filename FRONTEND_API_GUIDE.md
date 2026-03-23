@@ -1,164 +1,226 @@
-# Frontend API Integration Guide
+# Frontend API Integration Guide v2
 
-## Overview
+## Scope
 
-This backend exposes:
+This guide reflects the current backend implementation in this repository:
 
-- REST APIs secured with JWT bearer tokens
-- Google OAuth2 login that returns a JWT payload
-- STOMP over SockJS for live chat
-- OpenAPI docs at `/docs`
+- JWT-based REST authentication
+- User profile endpoints
+- Room management endpoints
+- STOMP over SockJS chat transport
+- OpenAPI docs exposed by Springdoc
 
-Useful references in the backend:
+Useful backend references:
 
 - `GET /docs`
 - `GET /v3/api-docs`
-- [src/main/java/com/abhishekojha/kurakanimonolith/common/SecurityConfig.java](src/main/java/com/abhishekojha/kurakanimonolith/common/SecurityConfig.java)
-- [src/main/java/com/abhishekojha/kurakanimonolith/modules/auth/OAuth2AuthenticationSuccessHandler.java](src/main/java/com/abhishekojha/kurakanimonolith/modules/auth/OAuth2AuthenticationSuccessHandler.java)
+- [src/main/java/com/abhishekojha/kurakanimonolith/common/config/SecurityConfig.java](src/main/java/com/abhishekojha/kurakanimonolith/common/config/SecurityConfig.java)
+- [src/main/java/com/abhishekojha/kurakanimonolith/modules/auth/controller/AuthController.java](src/main/java/com/abhishekojha/kurakanimonolith/modules/auth/controller/AuthController.java)
+- [src/main/java/com/abhishekojha/kurakanimonolith/modules/user/controller/UserController.java](src/main/java/com/abhishekojha/kurakanimonolith/modules/user/controller/UserController.java)
 - [src/main/java/com/abhishekojha/kurakanimonolith/modules/room/controller/RoomController.java](src/main/java/com/abhishekojha/kurakanimonolith/modules/room/controller/RoomController.java)
-- [src/main/java/com/abhishekojha/kurakanimonolith/common/security/WebSocketConfig.java](src/main/java/com/abhishekojha/kurakanimonolith/common/security/WebSocketConfig.java)
+- [src/main/java/com/abhishekojha/kurakanimonolith/common/config/WebSocketConfig.java](src/main/java/com/abhishekojha/kurakanimonolith/common/config/WebSocketConfig.java)
 
 ## Base URL
 
-For local development:
+Local development base URL:
 
 ```ts
 export const API_BASE_URL = "http://localhost:8080";
 ```
 
-## Authentication Flow
+## Authentication Model
 
-### Login Entry Point
+The backend expects JWT bearer authentication for protected REST routes.
 
-Start login by navigating the browser to:
-
-```http
-GET /oauth2/authorization/google
-```
-
-There is also a public helper endpoint:
+Send this header on authenticated requests:
 
 ```http
-GET /api/auth/public
+Authorization: Bearer <token>
 ```
+
+Current public auth endpoints:
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/password-reset`
+- `POST /api/auth/password-reset-confirm`
+
+Protected endpoints include:
+
+- `/api/user/**`
+- `/api/rooms/**`
+
+## Auth Endpoints
+
+### Register
+
+`POST /api/auth/register`
+
+Request body:
+
+```json
+{
+  "username": "abhishek",
+  "password": "secret123",
+  "email": "abhishek@example.com"
+}
+```
+
+Current controller returns:
+
+```http
+200 OK
+```
+
+Note:
+The controller signature says `ResponseEntity<AuthResponse>`, but it currently returns an empty body. Frontend code should not expect a token from registration unless the backend is changed.
+
+### Login
+
+`POST /api/auth/login`
+
+Request body:
+
+```json
+{
+  "username": "abhishek",
+  "password": "secret123"
+}
+```
+
+Response body:
+
+```json
+{
+  "token": "<jwt>",
+  "username": "abhishek",
+  "roles": ["ROLE_CUSTOMER"]
+}
+```
+
+Recommended frontend flow:
+
+1. Submit login form to `/api/auth/login`.
+2. Persist `token`, `username`, and `roles`.
+3. Attach the token to future API requests.
+4. Optionally call `GET /api/user/me` to hydrate the full profile.
+
+### Password Reset Request
+
+`POST /api/auth/password-reset`
+
+Request body:
+
+```json
+{
+  "email": "abhishek@example.com"
+}
+```
+
+Response:
+
+```http
+200 OK
+```
+
+Notes:
+
+- The reset code is sent through the backend email flow if mail is configured.
+- If mail is not configured, the backend currently skips sending email and logs a warning.
+
+### Password Reset Confirm
+
+`POST /api/auth/password-reset-confirm`
+
+Request body:
+
+```json
+{
+  "token": 123456,
+  "password": "newSecret123"
+}
+```
+
+Response:
+
+```http
+200 OK
+```
+
+## User Endpoints
+
+### Get Current User
+
+`GET /api/user/me`
+
+Requires bearer token.
 
 Example response:
 
 ```json
 {
-  "message": "Public auth endpoint",
-  "loginUrl": "/oauth2/authorization/google"
+  "id": 1,
+  "userName": "abhishek",
+  "email": "abhishek@example.com",
+  "enabled": true,
+  "roles": ["ROLE_CUSTOMER"],
+  "createdAt": "2026-03-22T21:00:00",
+  "updatedAt": "2026-03-22T21:00:00"
 }
 ```
 
-### OAuth2 Success Response
+### Update Current User
 
-After Google login succeeds, the backend returns JSON directly from the OAuth2 callback handler.
+`PATCH /api/user/me`
 
-Example payload:
+Requires bearer token.
+
+Request body:
 
 ```json
 {
-  "tokenType": "Bearer",
-  "accessToken": "jwt-token",
-  "expiresAt": "2026-03-22T10:00:00Z",
-  "user": {
-    "id": 1,
-    "email": "user@example.com",
-    "name": "User",
-    "roles": ["ROLE_USER"]
-  }
+  "userName": "abhishek-new",
+  "email": "new@example.com"
 }
 ```
 
-### Token Usage
+Any field can be omitted.
 
-Send the token on every protected REST request:
+### Admin User Endpoints
 
-```http
-Authorization: Bearer <accessToken>
-```
+These require `ROLE_ADMIN` in practice:
 
-## Recommended Frontend API Wrapper
+- `GET /api/user`
+- `GET /api/user/{userId}`
+- `DELETE /api/user/{userId}`
 
-```ts
-const API_BASE_URL = "http://localhost:8080";
+Important:
+`SecurityConfig` currently requires `ROLE_USER` for `/api/user/**`, while some controller methods also require `ROLE_ADMIN`. Frontend role checks should treat admin routes as admin-only.
 
-export async function apiFetch(path: string, init: RequestInit = {}) {
-  const token = localStorage.getItem("accessToken");
+## Room Endpoints
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(init.headers ?? {})
-    }
-  });
+All room endpoints require bearer authentication.
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => null);
-    throw error ?? new Error(`Request failed with ${response.status}`);
-  }
+### Create Room
 
-  return response.status === 204 ? null : response.json();
-}
-```
-
-## REST API Endpoints
-
-### Public
-
-#### `GET /api/auth/public`
-
-Returns a public payload with the login URL.
-
-### User
-
-#### `GET /api/user/profile`
-
-Requires `Authorization: Bearer <token>`.
-
-Example response:
-
-```json
-{
-  "message": "User content",
-  "principal": "user@example.com",
-  "authorities": [
-    {
-      "authority": "ROLE_USER"
-    }
-  ]
-}
-```
-
-### Admin
-
-#### `GET /api/admin/dashboard`
-
-Requires a token with `ROLE_ADMIN`.
-
-### Rooms
-
-#### `POST /api/rooms`
-
-Creates a room.
+`POST /api/rooms`
 
 Request body:
 
 ```json
 {
   "name": "General",
-  "description": "Main room",
+  "description": "Main room for all users",
   "type": "GROUP"
 }
 ```
 
-Allowed `type` values:
+Known room type values come from the backend enum:
 
-- `DM`
 - `GROUP`
+- `DIRECT`
+
+Check `/docs` if you want to confirm the exact enum values currently exposed.
 
 Example response shape:
 
@@ -166,27 +228,19 @@ Example response shape:
 {
   "id": 1,
   "name": "General",
-  "description": "Main room",
-  "members": [
-    {
-      "roomMemberId": 1,
-      "roomId": 1,
-      "userId": 1,
-      "roomRole": "ADMIN",
-      "joinedAt": "2026-03-22T15:00:00"
-    }
-  ],
+  "description": "Main room for all users",
+  "members": [],
   "messages": [],
   "type": "GROUP",
   "createdById": 1,
-  "createdAt": "2026-03-22T15:00:00",
-  "updatedAt": "2026-03-22T15:00:00"
+  "createdAt": "2026-03-22T21:00:00",
+  "updatedAt": "2026-03-22T21:00:00"
 }
 ```
 
-#### `GET /api/rooms/room/{roomId}`
+### Get Room Members
 
-Returns room members for the given room.
+`GET /api/rooms/room/{roomId}`
 
 Example response:
 
@@ -197,14 +251,14 @@ Example response:
     "roomId": 1,
     "userId": 1,
     "roomRole": "ADMIN",
-    "joinedAt": "2026-03-22T15:00:00"
+    "joinedAt": "2026-03-22T21:00:00"
   }
 ]
 ```
 
-#### `POST /api/rooms/room/{room_id}/add`
+### Add Users To Room
 
-Adds users to a room.
+`POST /api/rooms/room/{room_id}/add`
 
 Request body:
 
@@ -220,9 +274,11 @@ Response:
 200 OK
 ```
 
-#### `POST /api/rooms/room/{room_id}/remove`
+### Remove Users From Room
 
-Current request body:
+`POST /api/rooms/room/{room_id}/remove`
+
+Request body:
 
 ```json
 {
@@ -236,35 +292,28 @@ Response:
 204 No Content
 ```
 
-## WebSocket Chat Integration
+## WebSocket Chat
 
-This project uses SockJS with STOMP.
+The backend exposes a SockJS/STOMP endpoint:
 
-### Endpoints
+- handshake endpoint: `/chat`
+- app destination prefix: `/app`
+- broker topic prefix: `/topic`
 
-- WebSocket handshake: `/chat`
-- Publish destination: `/app/sendMessage/{roomId}`
-- Subscribe destination: `/topic/room/{roomId}`
+Current message flow:
 
-### Message Request Body
+- send to `/app/sendMessage/{roomId}`
+- subscribe to `/topic/room/{roomId}`
 
-```json
-{
-  "roomId": 1,
-  "content": "hello"
-}
-```
-
-### Frontend Example
+Example using `@stomp/stompjs` with SockJS:
 
 ```ts
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
-const API_BASE_URL = "http://localhost:8080";
-
 const client = new Client({
-  webSocketFactory: () => new SockJS(`${API_BASE_URL}/chat`)
+  webSocketFactory: () => new SockJS("http://localhost:8080/chat"),
+  reconnectDelay: 5000
 });
 
 client.onConnect = () => {
@@ -275,122 +324,108 @@ client.onConnect = () => {
 
   client.publish({
     destination: "/app/sendMessage/1",
-    body: JSON.stringify({
-      roomId: 1,
-      content: "hello"
-    })
+    body: JSON.stringify({ content: "Hello room" })
   });
 };
 
 client.activate();
 ```
 
-### Returned Message Shape
+Important:
+This WebSocket setup currently only allows origin `http://localhost:5173`.
 
-The WebSocket controller currently returns the persisted `Message` entity. The frontend should expect a payload shaped roughly like:
-
-```json
-{
-  "id": 10,
-  "content": "hello",
-  "isEdited": false,
-  "isDeleted": false,
-  "createdAt": "2026-03-22T15:00:00",
-  "updatedAt": "2026-03-22T15:00:00"
-}
-```
-
-Treat this shape carefully because the response comes from the entity, not a dedicated API DTO.
-
-## Error Response Shape
-
-The backend returns structured JSON errors.
-
-Example:
-
-```json
-{
-  "status": 404,
-  "error": "NOT_FOUND",
-  "message": "Room not found",
-  "path": "/api/rooms/room/99",
-  "timestamp": "2026-03-22T15:00:00",
-  "fieldErrors": null
-}
-```
-
-Recommended frontend error handler:
+## Recommended Frontend API Wrapper
 
 ```ts
+const API_BASE_URL = "http://localhost:8080";
+
 type ApiError = {
-  status: number;
-  error: string;
-  message: string;
-  path: string;
-  timestamp: string;
-  fieldErrors?: { field: string; message: string }[] | null;
+  status?: number;
+  error?: string;
+  message?: string;
+  path?: string;
+};
+
+export async function apiFetch<T>(
+  path: string,
+  init: RequestInit = {}
+): Promise<T> {
+  const token = localStorage.getItem("accessToken");
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(init.headers ?? {})
+    }
+  });
+
+  if (!response.ok) {
+    const error = (await response.json().catch(() => null)) as ApiError | null;
+    throw error ?? new Error(`Request failed with status ${response.status}`);
+  }
+
+  if (response.status === 204) {
+    return null as T;
+  }
+
+  return response.json() as Promise<T>;
+}
+```
+
+## Suggested Frontend Session Shape
+
+```ts
+type Session = {
+  token: string;
+  username: string;
+  roles: string[];
 };
 ```
 
-## Frontend State To Store
-
-After login, store:
-
-- `accessToken`
-- `expiresAt`
-- `user.id`
-- `user.email`
-- `user.name`
-- `user.roles`
-
-Example:
+Example login handling:
 
 ```ts
-type SessionUser = {
-  id: number;
-  email: string;
-  name: string;
+type AuthResponse = {
+  token: string;
+  username: string;
   roles: string[];
 };
 
-type SessionState = {
-  accessToken: string;
-  expiresAt: string;
-  user: SessionUser;
-};
+async function login(username: string, password: string) {
+  const session = await apiFetch<AuthResponse>("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ username, password })
+  });
+
+  localStorage.setItem("accessToken", session.token);
+  localStorage.setItem("session", JSON.stringify(session));
+
+  return session;
+}
 ```
 
-## Known Integration Caveats
+## Error Handling Expectations
 
-### 1. OAuth callback returns JSON directly
+For unauthorized requests, the backend returns `401` JSON responses from the auth entry point. Expect a shape similar to:
 
-The current login success flow returns JSON from the backend callback rather than redirecting back to the frontend with a token. That means a normal SPA popup/redirect flow may need backend adjustment if you want a smoother login experience.
+```json
+{
+  "status": 401,
+  "error": "Unauthorized",
+  "message": "Full authentication is required to access this resource",
+  "path": "/api/user/me"
+}
+```
 
-### 2. CORS is incomplete
+For authorization failures, expect `403 Forbidden`.
 
-Only some endpoints explicitly allow `http://localhost:5173`:
+## Best Source Of Truth
 
-- room controller
-- message controller
-- websocket handshake
+For request and response shape, the most reliable source is the generated OpenAPI document:
 
-Auth, user, and admin routes do not currently have matching explicit CORS configuration. Browser calls from a separate frontend origin may fail until global CORS is added.
+- Swagger UI: `http://localhost:8080/docs`
+- Raw schema: `http://localhost:8080/v3/api-docs`
 
-### 3. No REST endpoint for message history
-
-Messages are currently sent over WebSocket. There is no REST endpoint yet for fetching room message history.
-
-### 4. Remove-members endpoint should not be wired yet
-
-The current remove-members service implementation appears to delete users by ID rather than remove room membership links. Do not expose that action in the frontend until the backend implementation is fixed.
-
-## Suggested Frontend Integration Order
-
-1. Build a shared `apiFetch` wrapper with bearer token support.
-2. Implement login entry using `/api/auth/public` or `/oauth2/authorization/google`.
-3. Persist the returned JWT session payload.
-4. Build protected user-profile loading with `/api/user/profile`.
-5. Add room creation and room-members views.
-6. Add STOMP chat subscribe/send flow.
-7. Add token expiration handling and logout cleanup.
-
+If the markdown guide and `/docs` disagree, use `/docs`.

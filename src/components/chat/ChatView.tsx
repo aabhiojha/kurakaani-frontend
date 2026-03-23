@@ -5,12 +5,24 @@ import { ChatMessage } from './ChatMessage'
 import type { Conversation, Message } from '../../types/chat'
 
 type ChatViewProps = {
-	conversation: Conversation
+	conversation?: Conversation
 	messages: Message[]
 	onSendMessage: (conversationId: number, text: string) => void
+	isSendDisabled?: boolean
 }
 
-export function ChatView({ conversation, messages, onSendMessage }: ChatViewProps) {
+export function ChatView({ conversation, messages, onSendMessage, isSendDisabled = false }: ChatViewProps) {
+	if (!conversation) {
+		return (
+			<section className="motion-enter motion-stagger-2 flex min-w-0 flex-1 flex-col items-center justify-center bg-[var(--bg-surface)]">
+				<div className="text-center">
+					<h2 className="text-lg font-semibold text-[var(--text-primary)]">Select a chat to start messaging</h2>
+					<p className="text-[var(--text-secondary)]">Choose from your existing conversations or start a new one.</p>
+				</div>
+			</section>
+		)
+	}
+
 	const [draft, setDraft] = useState('')
 	const [isEmojiOpen, setIsEmojiOpen] = useState(false)
 	const messagesContainerRef = useRef<HTMLDivElement | null>(null)
@@ -44,6 +56,10 @@ export function ChatView({ conversation, messages, onSendMessage }: ChatViewProp
 	}, [])
 
 	const sendMessage = () => {
+		if (isSendDisabled) {
+			return
+		}
+
 		const cleaned = draft.trim()
 		if (!cleaned) {
 			return
@@ -133,9 +149,10 @@ export function ChatView({ conversation, messages, onSendMessage }: ChatViewProp
 							value={draft}
 							onChange={(event) => setDraft(event.target.value)}
 							onKeyDown={onKeyDown}
+							disabled={isSendDisabled}
 							rows={1}
 							placeholder={`Type your message to ${conversation.name}…`}
-							className="motion-focus min-h-11 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
+							className="motion-focus min-h-11 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] disabled:cursor-not-allowed disabled:opacity-60"
 						/>
 
 						<div ref={emojiPickerRef} className="relative">
@@ -167,14 +184,17 @@ export function ChatView({ conversation, messages, onSendMessage }: ChatViewProp
 						</div>
 						<button
 							type="submit"
-							className="motion-interactive inline-flex min-h-11 items-center rounded-xl bg-[var(--accent)] p-2 text-[var(--bg-page)] shadow-[var(--shadow-accent)] hover:bg-[var(--accent-strong)]"
+							disabled={isSendDisabled}
+							className="motion-interactive inline-flex min-h-11 items-center rounded-xl bg-[var(--accent)] p-2 text-[var(--bg-page)] shadow-[var(--shadow-accent)] hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
 							aria-label="send message"
 						>
 							<SendHorizontal size={17} />
 						</button>
 					</div>
 				</div>
-				<p className="mt-2 text-right text-xs text-[var(--text-muted)]">Press Enter to send</p>
+				<p className="mt-2 text-right text-xs text-[var(--text-muted)]">
+					{isSendDisabled ? 'Disconnected. Reconnecting…' : 'Press Enter to send'}
+				</p>
 			</form>
 		</section>
 	)
