@@ -84,7 +84,7 @@ export const conversationMessages: Record<number, Message[]> = {
 	1: [
 		{
 			id: 1,
-			side: 'left',
+			isSent: false,
 			senderName: 'Elena Vance',
 			senderAvatar: 'EV',
 			text: 'Hey! I just finished the updated landing page concepts and polished the hero cards. Want a quick preview?',
@@ -92,7 +92,7 @@ export const conversationMessages: Record<number, Message[]> = {
 		},
 		{
 			id: 2,
-			side: 'right',
+			isSent: true,
 			senderName: 'You',
 			senderAvatar: 'YO',
 			text: 'Perfect timing. I wanted to review the look before we lock the color treatment for this sprint.',
@@ -100,7 +100,7 @@ export const conversationMessages: Record<number, Message[]> = {
 		},
 		{
 			id: 3,
-			side: 'left',
+			isSent: false,
 			senderName: 'Elena Vance',
 			senderAvatar: 'EV',
 			text: 'Great — here is the glassmorphism direction for the dashboard module.',
@@ -109,7 +109,7 @@ export const conversationMessages: Record<number, Message[]> = {
 		},
 		{
 			id: 4,
-			side: 'left',
+			isSent: false,
 			senderName: 'Elena Vance',
 			senderAvatar: 'EV',
 			text: 'If this feels right, I’ll apply the same style to analytics and settings cards as well.',
@@ -117,28 +117,28 @@ export const conversationMessages: Record<number, Message[]> = {
 		},
 	],
 	2: [
-		{ id: 1, side: 'left', senderName: 'Marcus Chen', senderAvatar: 'MC', text: 'Quick sync later? I need API constraints for the messaging endpoint.', timestamp: '08:54 AM' },
-		{ id: 2, side: 'right', senderName: 'You', senderAvatar: 'YO', text: 'Sure, I can jump in at 10:30. I’ll bring the payload examples too.', timestamp: '08:58 AM' },
+		{ id: 1, isSent: false, senderName: 'Marcus Chen', senderAvatar: 'MC', text: 'Quick sync later? I need API constraints for the messaging endpoint.', timestamp: '08:54 AM' },
+		{ id: 2, isSent: true, senderName: 'You', senderAvatar: 'YO', text: 'Sure, I can jump in at 10:30. I’ll bring the payload examples too.', timestamp: '08:58 AM' },
 	],
 	3: [
-		{ id: 1, side: 'left', senderName: 'Sofia Rivera', senderAvatar: 'SR', text: 'Can you review the timeline update before standup?', timestamp: 'Monday' },
-		{ id: 2, side: 'right', senderName: 'You', senderAvatar: 'YO', text: 'Yes, I’ll review and share feedback in 20 minutes.', timestamp: 'Monday' },
+		{ id: 1, isSent: false, senderName: 'Sofia Rivera', senderAvatar: 'SR', text: 'Can you review the timeline update before standup?', timestamp: 'Monday' },
+		{ id: 2, isSent: true, senderName: 'You', senderAvatar: 'YO', text: 'Yes, I’ll review and share feedback in 20 minutes.', timestamp: 'Monday' },
 	],
 	101: [
-		{ id: 1, side: 'left', senderName: 'Sarah', senderAvatar: 'SA', text: 'I’ve finalized the moodboard and shared variants for dark mode.', timestamp: 'Yesterday' },
-		{ id: 2, side: 'left', senderName: 'Elena Vance', senderAvatar: 'EV', text: 'Nice direction. Let’s align card spacing before sign-off.', timestamp: 'Yesterday' },
-		{ id: 3, side: 'right', senderName: 'You', senderAvatar: 'YO', text: 'Looks solid. I’ll update spacing and typography tokens today.', timestamp: 'Today 10:12 AM' },
+		{ id: 1, isSent: false, senderName: 'Sarah', senderAvatar: 'SA', text: 'I’ve finalized the moodboard and shared variants for dark mode.', timestamp: 'Yesterday' },
+		{ id: 2, isSent: false, senderName: 'Elena Vance', senderAvatar: 'EV', text: 'Nice direction. Let’s align card spacing before sign-off.', timestamp: 'Yesterday' },
+		{ id: 3, isSent: true, senderName: 'You', senderAvatar: 'YO', text: 'Looks solid. I’ll update spacing and typography tokens today.', timestamp: 'Today 10:12 AM' },
 	],
 	102: [
-		{ id: 1, side: 'left', senderName: 'Aayush', senderAvatar: 'AY', text: 'Sprint planning notes are uploaded.', timestamp: '11:10 AM' },
-		{ id: 2, side: 'right', senderName: 'You', senderAvatar: 'YO', text: 'Thanks. I’ll review priorities and post blockers by noon.', timestamp: '11:14 AM' },
+		{ id: 1, isSent: false, senderName: 'Aayush', senderAvatar: 'AY', text: 'Sprint planning notes are uploaded.', timestamp: '11:10 AM' },
+		{ id: 2, isSent: true, senderName: 'You', senderAvatar: 'YO', text: 'Thanks. I’ll review priorities and post blockers by noon.', timestamp: '11:14 AM' },
 	],
 	103: [
-		{ id: 1, side: 'left', senderName: 'Mina', senderAvatar: 'MI', text: 'Let’s standardize icon sizing in shared components.', timestamp: '09:04 AM' },
-		{ id: 2, side: 'right', senderName: 'You', senderAvatar: 'YO', text: 'Agreed. I’ll open a PR with size tokens and a lint rule update.', timestamp: '09:08 AM' },
+		{ id: 1, isSent: false, senderName: 'Mina', senderAvatar: 'MI', text: 'Let’s standardize icon sizing in shared components.', timestamp: '09:04 AM' },
+		{ id: 2, isSent: true, senderName: 'You', senderAvatar: 'YO', text: 'Agreed. I’ll open a PR with size tokens and a lint rule update.', timestamp: '09:08 AM' },
 	],
 	104: [
-		{ id: 1, side: 'left', senderName: 'Rina', senderAvatar: 'RI', text: 'Campaign launch checklist is now complete.', timestamp: 'Monday' },
-		{ id: 2, side: 'right', senderName: 'You', senderAvatar: 'YO', text: 'Great. I’ll share design-ready assets with the team today.', timestamp: 'Monday' },
+		{ id: 1, isSent: false, senderName: 'Rina', senderAvatar: 'RI', text: 'Campaign launch checklist is now complete.', timestamp: 'Monday' },
+		{ id: 2, isSent: true, senderName: 'You', senderAvatar: 'YO', text: 'Great. I’ll share design-ready assets with the team today.', timestamp: 'Monday' },
 	],
 }

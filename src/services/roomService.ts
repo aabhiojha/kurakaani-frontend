@@ -1,5 +1,5 @@
 import { apiFetch } from '../lib/api'
-import type { RoomResponse } from '../types/api/room'
+import type { RoomMessageResponse, RoomResponse, RoomSummaryResponse } from '../types/api/room'
 
 export type CreateRoomRequest = {
 	name: string
@@ -7,12 +7,14 @@ export type CreateRoomRequest = {
 	type: 'DIRECT' | 'GROUP'
 }
 
-export const createRoom = (payload: CreateRoomRequest) => apiFetch('/api/rooms', {
+export const createRoom = (payload: CreateRoomRequest) => apiFetch<RoomResponse>('/api/rooms', {
 	method: 'POST',
 	body: JSON.stringify(payload),
 })
 
-export const getRooms = () => apiFetch<RoomResponse[]>('/api/rooms')
+export const getRooms = () => apiFetch<RoomSummaryResponse[]>('/api/rooms')
+
+export const getRoomMessages = (roomId: number) => apiFetch<RoomMessageResponse[]>(`/api/rooms/room/${roomId}/message`)
 
 export const getRoomMembers = (roomId: number) => apiFetch(`/api/rooms/room/${roomId}`)
 

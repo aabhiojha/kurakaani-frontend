@@ -11,7 +11,7 @@ export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext 
 	const [isMetaVisible, setIsMetaVisible] = useState(false)
 	const messageMetaRef = useRef<HTMLDivElement | null>(null)
 	const isSystemMessage = message.senderName === 'System'
-	const isRight = message.side === 'right'
+	const isRight = message.isSent
 
 	useEffect(() => {
 		if (!isMetaVisible) {

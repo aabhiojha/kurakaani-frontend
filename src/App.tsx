@@ -1,41 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { LayoutPanelLeft, MessageSquare, MessagesSquare, PanelLeftClose } from 'lucide-react'
+import { AuthPage } from './components/auth/AuthPage'
 import { ChatView } from './components/chat/ChatView'
 import { ProfilePage } from './components/layout/ProfilePage'
 import { RecentMessagesPanel } from './components/layout/RecentMessagesPanel'
 import { SettingsPage } from './components/layout/SettingsPage'
 import { Sidebar } from './components/layout/Sidebar'
 import type { SidebarView } from './components/layout/Sidebar'
-		const raw = window.localStorage.getItem(SELECTED_CONVERSATION_STORAGE_KEY)
-		if (raw === null) {
-			return null
-		}
-
-		const saved = Number(raw)
-		return Number.isNaN(saved) ? null : saved
 import { buildSessionFromAuth, getCurrentUser, loginWithPassword, logout, registerWithPassword, saveSession } from './services/authService'
 import { ChatSocketService, type ServerMessage } from './services/chatSocketService'
-import { createRoom, getRooms } from './services/roomService'
-import type { RoomResponse } from './types/api/room'
-		() => {
-			if (selectedConversationId === null) {
-				return undefined
-			}
-
-			return activeConversations.find((conversation) => conversation.id === selectedConversationId)
-		},
-		[activeConversations, selectedConversationId],
+import { createRoom, getRoomMessages, getRooms } from './services/roomService'
+import { conversationMessages, conversationsBySection } from './data/chatData'
+import { getSession } from './lib/session'
+import type { Conversation, ChatSection, Message } from './types/chat'
+import type { CurrentUserResponse, SessionState } from './types/api/session'
+import type { RoomMessageResponse, RoomSummaryResponse } from './types/api/room'
 
 const isChatSection = (view: SidebarView): view is ChatSection => view === 'direct' || view === 'groups'
 const THEME_STORAGE_KEY = 'kurakaani-theme'
 const ACTIVE_VIEW_STORAGE_KEY = 'kurakaani-active-view'
 const SELECTED_CONVERSATION_STORAGE_KEY = 'kurakaani-selected-conversation-id'
-			setSelectedConversationId((previous) => (
-				typeof previous === 'number' && conversationsState[section].some((conversation) => conversation.id === previous)
-					? previous
-					: null
-			))
+const CONVERSATIONS_STATE_STORAGE_KEY = 'kurakaani-conversations-state'
 const MESSAGES_STATE_STORAGE_KEY = 'kurakaani-messages-state'
+
 type ThemeMode = 'light' | 'dark' | 'system'
 type MobilePane = 'sidebar' | 'list' | 'detail'
 type AuthActionResult = { ok: true; message?: string } | { ok: false; error: string }
@@ -47,7 +34,7 @@ const isSidebarView = (value: string | null): value is SidebarView => {
 const loadPersistedConversations = (): Record<ChatSection, Conversation[]> => {
 	if (typeof window === 'undefined') {
 		return conversationsBySection
-		setSelectedConversationId(null)
+	}
 
 	try {
 		const raw = window.localStorage.getItem(CONVERSATIONS_STATE_STORAGE_KEY)
@@ -111,98 +98,32 @@ const normalizeMessageContent = (value: string): string => value.trim().replace(
 
 const normalizeUserName = (value?: string): string => (value ?? '').trim().toLowerCase()
 
-const extractMessageSenderId = (message: RoomResponse['messages'][number]): number | undefined => {
-	if (typeof message.senderId === 'number') {
-		return message.senderId
-	}
-
-	if (typeof message.userId === 'number') {
-		return message.userId
-	}
-
-	if (message.sender && typeof message.sender.id === 'number') {
-		return message.sender.id
-	}
-
-	if (message.user && typeof message.user.id === 'number') {
-		return message.user.id
-	}
-
-	return undefined
-}
-
-const extractMessageSenderName = (message: RoomResponse['messages'][number]): string | undefined => {
-	if (typeof message.senderName === 'string' && message.senderName.trim().length > 0) {
-		return message.senderName
-	}
-
-	if (typeof message.userName === 'string' && message.userName.trim().length > 0) {
-		return message.userName
-	}
-
-	if (typeof message.username === 'string' && message.username.trim().length > 0) {
-		return message.username
-	}
-
-	if (message.sender) {
-		if (typeof message.sender.userName === 'string' && message.sender.userName.trim().length > 0) {
-			return message.sender.userName
-		}
-
-		if (typeof message.sender.username === 'string' && message.sender.username.trim().length > 0) {
-			return message.sender.username
-		}
-
-		if (typeof message.sender.name === 'string' && message.sender.name.trim().length > 0) {
-			return message.sender.name
-		}
-	}
-
-	if (message.user) {
-		if (typeof message.user.userName === 'string' && message.user.userName.trim().length > 0) {
-			return message.user.userName
-		}
-
-		if (typeof message.user.username === 'string' && message.user.username.trim().length > 0) {
-			return message.user.username
-		}
-
-		if (typeof message.user.name === 'string' && message.user.name.trim().length > 0) {
-			return message.user.name
-		}
-	}
-
-	return undefined
-}
-
 const isMessageFromCurrentUser = (
-	message: RoomResponse['messages'][number],
+	message: RoomMessageResponse,
 	currentUserId: number | undefined,
 	currentUserName: string | undefined,
 ): boolean => {
-	const senderId = extractMessageSenderId(message)
-	if (typeof senderId === 'number' && typeof currentUserId === 'number' && currentUserId > 0) {
-		return senderId === currentUserId
+	if (typeof message.userInfo?.id === 'number' && typeof currentUserId === 'number' && currentUserId > 0) {
+		return message.userInfo.id === currentUserId
 	}
 
-	const senderName = normalizeUserName(extractMessageSenderName(message))
+	const senderName = normalizeUserName(message.userInfo?.username)
 	const userName = normalizeUserName(currentUserName)
 
 	return Boolean(senderName && userName && senderName === userName)
 }
 
-const mapRoomToConversation = (room: RoomResponse): Conversation => {
+const mapRoomToConversation = (room: RoomSummaryResponse): Conversation => {
 	const isGroup = room.type === 'GROUP'
-	const memberCount = room.members?.length ?? 0
-	const lastMessage = room.messages?.[room.messages.length - 1]
-	const preview = lastMessage?.content || room.description || 'No messages yet'
+	const preview = room.recentMessage?.content || room.description || 'No messages yet'
+	const time = room.recentMessage ? toConversationTime(room.recentMessage.sentAt) : ''
 
 	return {
 		id: room.id,
 		section: isGroup ? 'groups' : 'direct',
 		name: room.name,
-		subtitle: isGroup ? `${memberCount} MEMBERS` : 'DIRECT MESSAGE',
-		time: toConversationTime(room.updatedAt || room.createdAt),
+		subtitle: isGroup ? `${room.memberCount} MEMBERS` : 'DIRECT MESSAGE',
+		time,
 		preview,
 		avatar: getAvatarFromName(room.name, isGroup ? 'GR' : 'DM'),
 		isGroup,
@@ -210,22 +131,23 @@ const mapRoomToConversation = (room: RoomResponse): Conversation => {
 	}
 }
 
-const mapRoomToMessages = (room: RoomResponse, currentUserId?: number, currentUserName?: string): Message[] => {
-	if (!Array.isArray(room.messages) || room.messages.length === 0) {
-		return []
-	}
-
-	return room.messages.map((message, index) => {
-		const fallbackId = index + 1
+const mapRoomMessagesToMessages = (
+	messages: RoomMessageResponse[],
+	roomName: string,
+	roomType: string,
+	currentUserId?: number,
+	currentUserName?: string,
+): Message[] => {
+	return messages.map((message) => {
 		const fromCurrentUser = isMessageFromCurrentUser(message, currentUserId, currentUserName)
-		const senderName = extractMessageSenderName(message)
+		const senderName = message.userInfo?.username || roomName
 
 		return {
-			id: typeof message.id === 'number' ? message.id : fallbackId,
-			side: fromCurrentUser ? 'right' : 'left',
-			senderName: fromCurrentUser ? 'You' : senderName || room.name,
-			senderAvatar: fromCurrentUser ? 'YO' : getAvatarFromName(senderName || room.name, room.type === 'GROUP' ? 'GR' : 'DM'),
-			text: message.content || '',
+			id: message.id,
+			isSent: fromCurrentUser,
+			senderName: fromCurrentUser ? 'You' : senderName,
+			senderAvatar: fromCurrentUser ? 'YO' : getAvatarFromName(senderName, roomType === 'GROUP' ? 'GR' : 'DM'),
+			text: message.content,
 			timestamp: toConversationTime(message.createdAt),
 		}
 	})
@@ -264,13 +186,18 @@ function App() {
 	})
 	const [conversationsState, setConversationsState] = useState<Record<ChatSection, Conversation[]>>(() => loadPersistedConversations())
 	const [messagesByConversation, setMessagesByConversation] = useState<Record<number, Message[]>>(() => loadPersistedMessages())
-	const [selectedConversationId, setSelectedConversationId] = useState<number>(() => {
+	const [selectedConversationId, setSelectedConversationId] = useState<number | null>(() => {
 		if (typeof window === 'undefined') {
-			return conversationsBySection.direct[0].id
+			return null
 		}
 
-		const saved = Number(window.localStorage.getItem(SELECTED_CONVERSATION_STORAGE_KEY))
-		return Number.isNaN(saved) ? conversationsBySection.direct[0].id : saved
+		const saved = window.localStorage.getItem(SELECTED_CONVERSATION_STORAGE_KEY)
+		if (!saved) {
+			return null
+		}
+
+		const parsed = Number(saved)
+		return Number.isNaN(parsed) ? null : parsed
 	})
 	const [newChatTrigger, setNewChatTrigger] = useState(0)
 	const [viewportWidth, setViewportWidth] = useState(() => (typeof window === 'undefined' ? 1280 : window.innerWidth))
@@ -288,11 +215,20 @@ function App() {
 	const isDesktop = viewportWidth >= 1024
 
 	const activeConversations = conversationsState[activeSection]
-	const anyConversation = conversationsState.direct[0] ?? conversationsState.groups[0]
 
 	const activeConversation = useMemo(
-		() => activeConversations.find((conversation) => conversation.id === selectedConversationId) ?? activeConversations[0] ?? anyConversation,
-		[activeConversations, anyConversation, selectedConversationId],
+		() => {
+			if (selectedConversationId === null) {
+				return undefined
+			}
+
+			return (
+				conversationsState[activeSection].find((conversation) => conversation.id === selectedConversationId)
+				?? conversationsState.direct.find((conversation) => conversation.id === selectedConversationId)
+				?? conversationsState.groups.find((conversation) => conversation.id === selectedConversationId)
+			)
+		},
+		[activeSection, conversationsState, selectedConversationId],
 	)
 
 	const activeMessages = activeConversation ? (messagesByConversation[activeConversation.id] ?? []) : []
@@ -300,7 +236,6 @@ function App() {
 	const handleSectionChange = (section: SidebarView) => {
 		setActiveView(section)
 		if (isChatSection(section)) {
-			setSelectedConversationId((previous) => conversationsState[section][0]?.id ?? previous)
 			if (isMobile) {
 				setMobilePane('list')
 			}
@@ -313,7 +248,6 @@ function App() {
 
 	const handleNewChat = (section: ChatSection) => {
 		setActiveView(section)
-		setSelectedConversationId((previous) => conversationsState[section][0]?.id ?? previous)
 		setNewChatTrigger((previous) => previous + 1)
 		if (isMobile) {
 			setMobilePane('list')
@@ -358,7 +292,7 @@ function App() {
 			[roomId]: [
 				{
 					id: 1,
-					side: 'left',
+					isSent: false,
 					senderName: 'System',
 					senderAvatar: 'SYS',
 					text: `Room "${name}" created.`,
@@ -426,7 +360,7 @@ function App() {
 			[roomId]: [
 				{
 					id: 1,
-					side: 'left',
+					isSent: false,
 					senderName: 'System',
 					senderAvatar: 'SYS',
 					text: `Direct chat with "${name}" created.`,
@@ -482,30 +416,41 @@ function App() {
 					groups: [],
 				}
 
-				const nextMessages: Record<number, Message[]> = {}
-
 				for (const room of rooms) {
 					const conversation = mapRoomToConversation(room)
 					nextConversations[conversation.section].push(conversation)
-					nextMessages[room.id] = mapRoomToMessages(room, session.user.id, session.user.name)
+				}
+
+				const messageResults = await Promise.allSettled(
+					rooms.map((room) => getRoomMessages(room.id)),
+				)
+
+				const nextMessages: Record<number, Message[]> = {}
+
+				for (let i = 0; i < rooms.length; i++) {
+					const room = rooms[i]
+					const result = messageResults[i]
+					if (result.status === 'fulfilled' && Array.isArray(result.value)) {
+						nextMessages[room.id] = mapRoomMessagesToMessages(result.value, room.name, room.type, session.user.id, session.user.name)
+					} else {
+						nextMessages[room.id] = []
+					}
 				}
 
 				if (nextConversations.direct.length > 0 || nextConversations.groups.length > 0) {
 					setConversationsState(nextConversations)
 					setMessagesByConversation((previous) => ({ ...previous, ...nextMessages }))
 
-					const firstRoomId = nextConversations[activeSection][0]?.id
-						?? nextConversations.direct[0]?.id
-						?? nextConversations.groups[0]?.id
+					setSelectedConversationId((previous) => {
+						if (previous === null) {
+							return null
+						}
 
-					if (typeof firstRoomId === 'number') {
-						setSelectedConversationId((previous) => {
-							const stillExists = nextConversations.direct.some((item) => item.id === previous)
-								|| nextConversations.groups.some((item) => item.id === previous)
+						const stillExists = nextConversations.direct.some((item) => item.id === previous)
+							|| nextConversations.groups.some((item) => item.id === previous)
 
-							return stillExists ? previous : firstRoomId
-						})
-					}
+						return stillExists ? previous : null
+					})
 
 					setBackendStatus(`Loaded ${rooms.length} rooms from backend.`)
 				} else {
@@ -571,7 +516,7 @@ function App() {
 					...currentMessages,
 					{
 						id: nextId,
-						side: 'right',
+						isSent: true,
 						senderName: 'You',
 						senderAvatar: 'YO',
 						text,
@@ -607,6 +552,11 @@ function App() {
 			const nextSession = buildSessionFromAuth(authResponse, currentUser)
 			saveSession(nextSession)
 			setSession(nextSession)
+			setActiveView('groups')
+			setSelectedConversationId(null)
+			if (isMobile) {
+				setMobilePane('list')
+			}
 			setBackendStatus(`Signed in as ${nextSession.user.name}. Authenticated requests enabled.`)
 			return { ok: true }
 		} catch (error) {
@@ -654,6 +604,11 @@ function App() {
 	}, [activeView])
 
 	useEffect(() => {
+		if (selectedConversationId === null) {
+			window.localStorage.removeItem(SELECTED_CONVERSATION_STORAGE_KEY)
+			return
+		}
+
 		window.localStorage.setItem(SELECTED_CONVERSATION_STORAGE_KEY, String(selectedConversationId))
 	}, [selectedConversationId])
 
@@ -738,7 +693,7 @@ function App() {
 
 				const lastMessage = currentMessages[currentMessages.length - 1]
 				const duplicatedFromOptimistic =
-					fromCurrentUser && lastMessage?.side === 'right' && normalizeMessageContent(lastMessage.text) === normalizedContent
+					fromCurrentUser && lastMessage?.isSent === true && normalizeMessageContent(lastMessage.text) === normalizedContent
 
 				if (duplicatedFromOptimistic) {
 					return prev
@@ -754,7 +709,7 @@ function App() {
 						...currentMessages,
 						{
 							id: payload.id,
-							side: fromCurrentUser ? 'right' : 'left',
+							isSent: fromCurrentUser,
 							senderName: fromCurrentUser ? 'You' : activeConversation.name,
 							senderAvatar: fromCurrentUser ? 'YO' : activeConversation.avatar,
 							text: payload.content,
@@ -853,25 +808,10 @@ function App() {
 					themeMode={themeMode}
 					isDarkMode={isDarkMode}
 					onThemeModeChange={setThemeMode}
-					isAuthenticated={Boolean(session?.accessToken)}
 					sessionName={session?.user.name}
 					backendStatus={backendStatus}
-					isSubmitting={isAuthSubmitting}
-					onLogin={handleLogin}
-					onRegister={handleRegister}
 					onLogout={handleLogout}
 				/>
-			)
-		}
-
-		if (!activeConversation) {
-			return (
-				<section className="flex min-w-0 flex-1 items-center justify-center bg-[var(--bg-surface-alt)] p-6 text-center">
-					<div>
-						<h2 className="text-lg font-semibold text-[var(--text-primary)]">No conversations yet</h2>
-						<p className="mt-1 text-sm text-[var(--text-secondary)]">Create a new chat to start messaging.</p>
-					</div>
-				</section>
 			)
 		}
 
@@ -918,7 +858,7 @@ function App() {
 					<RecentMessagesPanel
 						section={activeSection}
 						conversations={activeConversations}
-						selectedConversationId={activeConversation.id}
+						selectedConversationId={activeConversation?.id ?? -1}
 						onSelectConversation={handleSelectConversation}
 						onCreateDirect={handleCreateDirect}
 						onCreateGroup={handleCreateGroup}
@@ -954,6 +894,19 @@ function App() {
 					isSendDisabled={Boolean(session?.accessToken) && !isSocketConnected}
 				/>
 			</>
+		)
+	}
+
+	if (!session?.accessToken) {
+		return (
+			<div data-theme={isDarkMode ? 'dark' : 'light'} className="min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)] antialiased">
+				<AuthPage
+					isSubmitting={isAuthSubmitting}
+					backendStatus={backendStatus}
+					onLogin={handleLogin}
+					onRegister={handleRegister}
+				/>
+			</div>
 		)
 	}
 

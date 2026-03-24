@@ -9,27 +9,39 @@ export type RoomMemberResponse = {
 }
 
 export type RoomMessageResponse = {
-	id?: number
-	content?: string
-	senderId?: number
-	userId?: number
-	senderName?: string
-	userName?: string
-	username?: string
-	sender?: {
-		id?: number
-		userName?: string
-		username?: string
-		name?: string
+	id: number
+	roomId: number
+	content: string
+	isEdited: boolean
+	isDeleted: boolean
+	createdAt: string
+	updatedAt: string
+	userInfo: {
+		id: number
+		username: string
+		profileImageUrl?: string
 	}
-	user?: {
-		id?: number
-		userName?: string
-		username?: string
-		name?: string
+}
+
+export type RecentMessageResponse = {
+	id: number
+	roomId: number
+	content: string
+	sentAt: string
+	sender: {
+		id: number
+		username: string
 	}
-	createdAt?: string
-	[key: string]: unknown
+}
+
+export type RoomSummaryResponse = {
+	id: number
+	name: string
+	description: string
+	type: RoomType
+	memberCount: number
+	recentMessage: RecentMessageResponse | null
+	unreadCount: number
 }
 
 export type RoomResponse = {

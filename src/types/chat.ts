@@ -1,10 +1,8 @@
-export type MessageSide = 'left' | 'right'
-
 export type ChatSection = 'direct' | 'groups'
 
 export type Message = {
 	id: number
-	side: MessageSide
+	isSent: boolean
 	senderName: string
 	senderAvatar: string
 	text: string

@@ -21,6 +21,24 @@ const buildApiUrl = (path: string): string => {
 	return `${normalizedBase}${normalizedPath}`
 }
 
+async function parseResponseBody<T>(response: Response): Promise<T> {
+	if (response.status === 204) {
+		return null as T
+	}
+
+	const contentLength = response.headers.get('content-length')
+	if (contentLength === '0') {
+		return null as T
+	}
+
+	const raw = await response.text()
+	if (!raw.trim()) {
+		return null as T
+	}
+
+	return JSON.parse(raw) as T
+}
+
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
 	const session = getSession()
 	const token = session?.accessToken
@@ -39,11 +57,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 		throw error ?? new Error(`Request failed with ${response.status}`)
 	}
 
-	if (response.status === 204) {
-		return null as T
-	}
-
-	return (await response.json()) as T
+	return parseResponseBody<T>(response)
 }
 
 export async function publicFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -60,9 +74,5 @@ export async function publicFetch<T>(path: string, init: RequestInit = {}): Prom
 		throw error ?? new Error(`Request failed with ${response.status}`)
 	}
 
-	if (response.status === 204) {
-		return null as T
-	}
-
-	return (await response.json()) as T
+	return parseResponseBody<T>(response)
 }

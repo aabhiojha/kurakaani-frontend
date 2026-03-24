@@ -16,8 +16,8 @@ export function ChatView({ conversation, messages, onSendMessage, isSendDisabled
 		return (
 			<section className="motion-enter motion-stagger-2 flex min-w-0 flex-1 flex-col items-center justify-center bg-[var(--bg-surface)]">
 				<div className="text-center">
-					<h2 className="text-lg font-semibold text-[var(--text-primary)]">Select a chat to start messaging</h2>
-					<p className="text-[var(--text-secondary)]">Choose from your existing conversations or start a new one.</p>
+					<h2 className="text-lg font-semibold text-[var(--text-primary)]">Click on a group to start chatting</h2>
+					<p className="text-[var(--text-secondary)]">Pick a group from the list to open the conversation.</p>
 				</div>
 			</section>
 		)
@@ -128,8 +128,8 @@ export function ChatView({ conversation, messages, onSendMessage, isSendDisabled
 						<ChatMessage
 							key={message.id}
 							message={message}
-							isGroupedWithPrevious={messages[index - 1]?.side === message.side}
-							isGroupedWithNext={messages[index + 1]?.side === message.side}
+							isGroupedWithPrevious={messages[index - 1]?.isSent === message.isSent}
+							isGroupedWithNext={messages[index + 1]?.isSent === message.isSent}
 						/>
 					))}
 				</div>

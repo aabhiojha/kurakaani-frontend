@@ -1,20 +1,21 @@
-# Frontend API Integration Guide v2
+# Frontend API Integration Guide
 
 ## Scope
 
-This guide reflects the current backend implementation in this repository:
+This guide reflects the current backend implementation in this repository.
+
+The backend currently exposes:
 
 - JWT-based REST authentication
-- User profile endpoints
-- Room management endpoints
-- STOMP over SockJS chat transport
-- OpenAPI docs exposed by Springdoc
+- user profile endpoints
+- room and room-membership endpoints
+- STOMP over SockJS for live chat
+- OpenAPI docs at `/docs`
 
 Useful backend references:
 
 - `GET /docs`
 - `GET /v3/api-docs`
-- [src/main/java/com/abhishekojha/kurakanimonolith/common/config/SecurityConfig.java](src/main/java/com/abhishekojha/kurakanimonolith/common/config/SecurityConfig.java)
 - [src/main/java/com/abhishekojha/kurakanimonolith/modules/auth/controller/AuthController.java](src/main/java/com/abhishekojha/kurakanimonolith/modules/auth/controller/AuthController.java)
 - [src/main/java/com/abhishekojha/kurakanimonolith/modules/user/controller/UserController.java](src/main/java/com/abhishekojha/kurakanimonolith/modules/user/controller/UserController.java)
 - [src/main/java/com/abhishekojha/kurakanimonolith/modules/room/controller/RoomController.java](src/main/java/com/abhishekojha/kurakanimonolith/modules/room/controller/RoomController.java)
@@ -22,33 +23,79 @@ Useful backend references:
 
 ## Base URL
 
-Local development base URL:
+Local development:
 
 ```ts
 export const API_BASE_URL = "http://localhost:8080";
 ```
 
+## CORS
+
+The backend currently allows frontend requests from:
+
+- `http://localhost:5173`
+- `http://127.0.0.1:5173`
+
 ## Authentication Model
 
-The backend expects JWT bearer authentication for protected REST routes.
-
-Send this header on authenticated requests:
+Protected REST endpoints expect:
 
 ```http
 Authorization: Bearer <token>
 ```
 
-Current public auth endpoints:
+The login response shape is:
 
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `POST /api/auth/password-reset`
-- `POST /api/auth/password-reset-confirm`
+```json
+{
+  "token": "<jwt>",
+  "username": "abhishek",
+  "roles": ["ROLE_USER"]
+}
+```
 
-Protected endpoints include:
+Recommended frontend session storage:
 
-- `/api/user/**`
-- `/api/rooms/**`
+```ts
+type Session = {
+  token: string;
+  username: string;
+  roles: string[];
+};
+```
+
+## Recommended API Wrapper
+
+```ts
+const API_BASE_URL = "http://localhost:8080";
+
+export async function apiFetch<T>(
+  path: string,
+  init: RequestInit = {}
+): Promise<T> {
+  const token = localStorage.getItem("accessToken");
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(init.headers ?? {})
+    }
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => null);
+    throw error ?? new Error(`Request failed with ${response.status}`);
+  }
+
+  if (response.status === 204) {
+    return null as T;
+  }
+
+  return response.json() as Promise<T>;
+}
+```
 
 ## Auth Endpoints
 
@@ -66,14 +113,14 @@ Request body:
 }
 ```
 
-Current controller returns:
+Current response:
 
 ```http
 200 OK
 ```
 
 Note:
-The controller signature says `ResponseEntity<AuthResponse>`, but it currently returns an empty body. Frontend code should not expect a token from registration unless the backend is changed.
+The controller signature returns `AuthResponse`, but the current implementation sends an empty body. The frontend should not expect a token from registration.
 
 ### Login
 
@@ -94,18 +141,18 @@ Response body:
 {
   "token": "<jwt>",
   "username": "abhishek",
-  "roles": ["ROLE_CUSTOMER"]
+  "roles": ["ROLE_USER"]
 }
 ```
 
 Recommended frontend flow:
 
-1. Submit login form to `/api/auth/login`.
+1. Call `/api/auth/login`.
 2. Persist `token`, `username`, and `roles`.
-3. Attach the token to future API requests.
-4. Optionally call `GET /api/user/me` to hydrate the full profile.
+3. Attach the token to future REST requests.
+4. Use the same token for WebSocket STOMP connect headers.
 
-### Password Reset Request
+### Password Reset
 
 `POST /api/auth/password-reset`
 
@@ -122,11 +169,6 @@ Response:
 ```http
 200 OK
 ```
-
-Notes:
-
-- The reset code is sent through the backend email flow if mail is configured.
-- If mail is not configured, the backend currently skips sending email and logs a warning.
 
 ### Password Reset Confirm
 
@@ -163,9 +205,9 @@ Example response:
   "userName": "abhishek",
   "email": "abhishek@example.com",
   "enabled": true,
-  "roles": ["ROLE_CUSTOMER"],
-  "createdAt": "2026-03-22T21:00:00",
-  "updatedAt": "2026-03-22T21:00:00"
+  "roles": ["ROLE_USER"],
+  "createdAt": "2026-03-23T16:00:00",
+  "updatedAt": "2026-03-23T16:00:00"
 }
 ```
 
@@ -184,22 +226,95 @@ Request body:
 }
 ```
 
-Any field can be omitted.
-
 ### Admin User Endpoints
 
-These require `ROLE_ADMIN` in practice:
+These endpoints are intended for admins:
 
 - `GET /api/user`
 - `GET /api/user/{userId}`
 - `DELETE /api/user/{userId}`
 
-Important:
-`SecurityConfig` currently requires `ROLE_USER` for `/api/user/**`, while some controller methods also require `ROLE_ADMIN`. Frontend role checks should treat admin routes as admin-only.
-
 ## Room Endpoints
 
 All room endpoints require bearer authentication.
+
+### Get Rooms
+
+`GET /api/rooms`
+
+Returns all rooms the authenticated user is a member of, each with the most recent message.
+
+Response shape:
+
+```json
+[
+  {
+    "id": 1,
+    "name": "General",
+    "description": "Main room",
+    "type": "GROUP",
+    "memberCount": 4,
+    "recentMessage": {
+      "id": 10,
+      "roomId": 1,
+      "content": "hey everyone",
+      "sentAt": "2026-03-24T10:30:00",
+      "sender": {
+        "id": 2,
+        "username": "ram"
+      }
+    },
+    "unreadCount": 0
+  }
+]
+```
+
+`recentMessage` is `null` for rooms that have no messages yet.
+
+### Get Messages For Room
+
+`GET /api/rooms/room/{roomId}/message`
+
+Returns the full message history for a room.
+
+Response shape:
+
+```json
+[
+  {
+    "id": 10,
+    "roomId": 1,
+    "content": "hey everyone",
+    "isEdited": false,
+    "isDeleted": false,
+    "createdAt": "2026-03-24T10:30:00",
+    "updatedAt": "2026-03-24T10:30:00",
+    "userInfo": {
+      "id": 2,
+      "username": "ram",
+      "profileImageUrl": "https://..."
+    }
+  }
+]
+```
+
+### Get Room Members
+
+`GET /api/rooms/room/{roomId}`
+
+Response shape:
+
+```json
+[
+  {
+    "roomMemberId": 1,
+    "roomId": 1,
+    "userId": 1,
+    "roomRole": "ADMIN",
+    "joinedAt": "2026-03-23T16:00:00"
+  }
+]
+```
 
 ### Create Room
 
@@ -210,50 +325,38 @@ Request body:
 ```json
 {
   "name": "General",
-  "description": "Main room for all users",
+  "description": "Main room",
   "type": "GROUP"
 }
 ```
 
-Known room type values come from the backend enum:
+Allowed `type` values:
 
+- `DM`
 - `GROUP`
-- `DIRECT`
 
-Check `/docs` if you want to confirm the exact enum values currently exposed.
-
-Example response shape:
+Response (`201 Created`):
 
 ```json
 {
   "id": 1,
   "name": "General",
-  "description": "Main room for all users",
-  "members": [],
+  "description": "Main room",
+  "members": [
+    {
+      "roomMemberId": 1,
+      "roomId": 1,
+      "userId": 1,
+      "roomRole": "ADMIN",
+      "joinedAt": "2026-03-23T16:00:00"
+    }
+  ],
   "messages": [],
   "type": "GROUP",
   "createdById": 1,
-  "createdAt": "2026-03-22T21:00:00",
-  "updatedAt": "2026-03-22T21:00:00"
+  "createdAt": "2026-03-23T16:00:00",
+  "updatedAt": "2026-03-23T16:00:00"
 }
-```
-
-### Get Room Members
-
-`GET /api/rooms/room/{roomId}`
-
-Example response:
-
-```json
-[
-  {
-    "roomMemberId": 1,
-    "roomId": 1,
-    "userId": 1,
-    "roomRole": "ADMIN",
-    "joinedAt": "2026-03-22T21:00:00"
-  }
-]
 ```
 
 ### Add Users To Room
@@ -292,140 +395,74 @@ Response:
 204 No Content
 ```
 
+Important:
+The current backend implementation for removal does not behave like a proper room-membership unlink. Frontend code should treat this endpoint as unsafe until the backend logic is corrected.
+
 ## WebSocket Chat
 
-The backend exposes a SockJS/STOMP endpoint:
+The backend exposes:
 
-- handshake endpoint: `/chat`
+- handshake endpoint: `/ws`
 - app destination prefix: `/app`
 - broker topic prefix: `/topic`
 
-Current message flow:
+Current chat flow:
 
-- send to `/app/sendMessage/{roomId}`
-- subscribe to `/topic/room/{roomId}`
+- connect to `/ws`
+- send `Authorization: Bearer <jwt>` in STOMP `CONNECT` headers
+- subscribe to `/topic/rooms/{roomId}`
+- publish to `/app/chat.send/{roomId}`
 
-Example using `@stomp/stompjs` with SockJS:
+Minimal frontend example:
 
 ```ts
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
 const client = new Client({
-  webSocketFactory: () => new SockJS("http://localhost:8080/chat"),
+  webSocketFactory: () => new SockJS("http://localhost:8080/ws"),
+  connectHeaders: {
+    Authorization: `Bearer ${token}`
+  },
   reconnectDelay: 5000
 });
 
 client.onConnect = () => {
-  client.subscribe("/topic/room/1", (frame) => {
+  client.subscribe(`/topic/rooms/${roomId}`, (frame) => {
     const message = JSON.parse(frame.body);
     console.log("received", message);
-  });
-
-  client.publish({
-    destination: "/app/sendMessage/1",
-    body: JSON.stringify({ content: "Hello room" })
   });
 };
 
 client.activate();
 ```
 
-Important:
-This WebSocket setup currently only allows origin `http://localhost:5173`.
-
-## Recommended Frontend API Wrapper
+Send message:
 
 ```ts
-const API_BASE_URL = "http://localhost:8080";
-
-type ApiError = {
-  status?: number;
-  error?: string;
-  message?: string;
-  path?: string;
-};
-
-export async function apiFetch<T>(
-  path: string,
-  init: RequestInit = {}
-): Promise<T> {
-  const token = localStorage.getItem("accessToken");
-
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(init.headers ?? {})
-    }
-  });
-
-  if (!response.ok) {
-    const error = (await response.json().catch(() => null)) as ApiError | null;
-    throw error ?? new Error(`Request failed with status ${response.status}`);
-  }
-
-  if (response.status === 204) {
-    return null as T;
-  }
-
-  return response.json() as Promise<T>;
-}
+client.publish({
+  destination: `/app/chat.send/${roomId}`,
+  body: JSON.stringify({ content: "hello" })
+});
 ```
 
-## Suggested Frontend Session Shape
-
-```ts
-type Session = {
-  token: string;
-  username: string;
-  roles: string[];
-};
-```
-
-Example login handling:
-
-```ts
-type AuthResponse = {
-  token: string;
-  username: string;
-  roles: string[];
-};
-
-async function login(username: string, password: string) {
-  const session = await apiFetch<AuthResponse>("/api/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ username, password })
-  });
-
-  localStorage.setItem("accessToken", session.token);
-  localStorage.setItem("session", JSON.stringify(session));
-
-  return session;
-}
-```
-
-## Error Handling Expectations
-
-For unauthorized requests, the backend returns `401` JSON responses from the auth entry point. Expect a shape similar to:
+Expected message payload:
 
 ```json
 {
-  "status": 401,
-  "error": "Unauthorized",
-  "message": "Full authentication is required to access this resource",
-  "path": "/api/user/me"
+  "id": 10,
+  "senderId": 2,
+  "roomId": 1,
+  "content": "hello",
+  "isEdited": false,
+  "isDeleted": false,
+  "createdAt": "2026-03-23T16:00:00",
+  "updatedAt": "2026-03-23T16:00:00"
 }
 ```
 
-For authorization failures, expect `403 Forbidden`.
+## Known Backend Caveats
 
-## Best Source Of Truth
-
-For request and response shape, the most reliable source is the generated OpenAPI document:
-
-- Swagger UI: `http://localhost:8080/docs`
-- Raw schema: `http://localhost:8080/v3/api-docs`
-
-If the markdown guide and `/docs` disagree, use `/docs`.
+- Room member removal (`POST /api/rooms/room/{room_id}/remove`) currently deletes the users from the users table rather than unlinking them from the room. Do not use this in production until the backend logic is corrected.
+- Registration currently returns no auth payload.
+- WebSocket message send still depends on STOMP session authentication being attached correctly.
