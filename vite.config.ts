@@ -14,21 +14,37 @@ export default defineConfig({
       'unalimentary-emilie-flamboyantly.ngrok-free.dev',
       'all'
     ],
+    // proxy: {
+    //   '/api': {
+    //     target: 'http://localhost:8080',
+    //     changeOrigin: true,
+    //   },
+    //   '/oauth2': {
+    //     target: 'http://localhost:8080',
+    //     changeOrigin: true,
+    //   },
+    //   '/chat': {
+    //     target: 'http://localhost:8080',
+    //     changeOrigin: true,
+    //     ws: true,
+    //   },
+
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'http:32.236.3.182:8080/',
         changeOrigin: true,
       },
       '/oauth2': {
-        target: 'http://localhost:8080',
+        target: 'http:32.236.3.182:8080/',
         changeOrigin: true,
       },
       '/chat': {
-        target: 'http://localhost:8080',
+        target: 'http:32.236.3.182:8080/',
         changeOrigin: true,
         ws: true,
       },
-    },
+
+  },
   },
 
 })
