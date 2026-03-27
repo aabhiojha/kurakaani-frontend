@@ -1,10 +1,11 @@
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').trim()
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0'])
+
+const envApiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').trim()
+export const API_BASE_URL = envApiBaseUrl
 const parsedGlobalRoomId = Number(import.meta.env.VITE_GLOBAL_ROOM_ID ?? '1')
 export const GLOBAL_ROOM_ID = Number.isInteger(parsedGlobalRoomId) && parsedGlobalRoomId > 0 ? parsedGlobalRoomId : 1
 
 export const SESSION_STORAGE_KEY = 'kurakaani-session'
-
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0'])
 
 export const resolveAssetUrl = (value?: string | null) => {
 	if (!value) {

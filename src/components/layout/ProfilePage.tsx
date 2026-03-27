@@ -52,6 +52,7 @@ export function ProfilePage({
 	onUploadProfileImage,
 }: ProfilePageProps) {
 	const displayName = session?.user.name || currentUser?.userName || 'Kurakaani User'
+	const username = currentUser?.userName ?? session?.user.name ?? 'Unavailable'
 	const email = session?.user.email || currentUser?.email || 'No email available'
 	const roles = currentUser?.roles ?? session?.user.roles ?? []
 	const avatarLabel = getAvatarLabel(displayName)
@@ -145,6 +146,25 @@ export function ProfilePage({
 							<p className="mt-1 text-sm text-[var(--text-secondary)]">Authenticated account data from the backend session.</p>
 						</div>
 
+						<div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-soft)] p-3">
+							<div className="flex min-w-0 items-center gap-3">
+								<div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--avatar-neutral-bg)] text-xs font-semibold text-white">
+									{profileImageUrl ? (
+										<img src={profileImageUrl} alt={displayName} className="h-full w-full object-cover" />
+									) : (
+										avatarLabel
+									)}
+								</div>
+								<div className="min-w-0">
+									<p className="truncate text-sm font-semibold text-[var(--text-primary)]">{displayName}</p>
+									<p className="truncate text-xs text-[var(--text-secondary)]">@{username}</p>
+								</div>
+							</div>
+							<span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+								{enabledLabel}
+							</span>
+						</div>
+
 						<div className="grid gap-4 md:grid-cols-2">
 							<div className="text-sm font-medium text-[var(--text-secondary)]">
 								Display Name
@@ -155,7 +175,7 @@ export function ProfilePage({
 							<div className="text-sm font-medium text-[var(--text-secondary)]">
 								Username
 								<div className="mt-1.5 rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2.5 text-sm text-[var(--text-primary)]">
-									{currentUser?.userName ?? session?.user.name ?? 'Unavailable'}
+									{username}
 								</div>
 							</div>
 							<div className="text-sm font-medium text-[var(--text-secondary)]">

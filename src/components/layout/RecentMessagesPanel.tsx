@@ -44,7 +44,7 @@ export function RecentMessagesPanel({
 		const trimmedDescription = createDescription.trim()
 
 		if (!trimmedName) {
-			setCreateChatStatus(section === 'groups' ? 'Group name is required.' : 'Name is required.')
+			setCreateChatStatus(section === 'groups' ? 'Group name is required.' : 'User ID is required.')
 			return
 		}
 
@@ -95,14 +95,14 @@ export function RecentMessagesPanel({
 							type="text"
 							value={createName}
 							onChange={(event) => setCreateName(event.target.value)}
-							placeholder={section === 'groups' ? 'Group name' : 'Person name'}
+							placeholder={section === 'groups' ? 'Group name' : 'Target user ID'}
 							className="motion-focus mb-2 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
 						/>
 						<input
 							type="text"
 							value={createDescription}
 							onChange={(event) => setCreateDescription(event.target.value)}
-							placeholder={section === 'groups' ? 'Description (optional)' : 'Intro message (optional)'}
+							placeholder={section === 'groups' ? 'Description (optional)' : 'Description (optional)'}
 							className="motion-focus mb-2 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
 						/>
 						<div className="flex items-center justify-between">

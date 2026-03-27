@@ -379,9 +379,9 @@ Response shape:
 ]
 ```
 
-### Create Room
+### Create Group Room
 
-`POST /api/rooms`
+`POST /api/rooms/group`
 
 Request body:
 
@@ -393,10 +393,7 @@ Request body:
 }
 ```
 
-Allowed `type` values:
-
-- `DM`
-- `GROUP`
+The authenticated user is automatically added as `ADMIN`.
 
 Response (`201 Created`):
 
@@ -422,23 +419,136 @@ Response (`201 Created`):
 }
 ```
 
-### Add Users To Room
+Error responses:
 
-`POST /api/rooms/room/{room_id}/add`
+- `409 Conflict` — a room with that name already exists for this user
+
+### Create or Retrieve a DM
+
+`POST /api/rooms/dm?userId={userId}`
+
+Query parameter:
+
+- `userId` — the ID of the user to start a DM with
+
+If a DM between the authenticated user and the target user already exists, it is returned instead of creating a new one. The frontend can call this unconditionally before opening a DM conversation.
+
+Response (`201 Created`):
+
+```json
+{
+  "id": 2,
+  "name": "dm_1_3",
+  "description": null,
+  "members": [
+    {
+      "roomMemberId": 3,
+      "roomId": 2,
+      "userId": 1,
+      "roomRole": "MEMBER",
+      "joinedAt": "2026-03-27T10:00:00"
+    },
+    {
+      "roomMemberId": 4,
+      "roomId": 2,
+      "userId": 3,
+      "roomRole": "MEMBER",
+      "joinedAt": "2026-03-27T10:00:00"
+    }
+  ],
+  "messages": [],
+  "type": "DM",
+  "createdById": 1,
+  "createdAt": "2026-03-27T10:00:00",
+  "updatedAt": "2026-03-27T10:00:00"
+}
+```
+
+Note: `name` is auto-generated as `dm_{minUserId}_{maxUserId}` and is not meaningful to the frontend — use the member list to display participant names.
+
+Error responses:
+
+- `404 Not Found` — target user does not exist
+
+### Upgrade a DM to a Group Room
+
+`POST /api/rooms/room/{roomId}/group/create`
+
+Converts an existing DM into a group by adding more users to it. Use this when a user wants to turn a one-on-one conversation into a group chat.
 
 Request body:
 
 ```json
 {
-  "userIds": [2, 3]
+  "userIds": [4, 5]
 }
 ```
 
-Response:
+Response (`200 OK`):
 
-```http
-200 OK
+```json
+{
+  "id": 2,
+  "name": "dm_1_3",
+  "description": null,
+  "members": [...],
+  "messages": [],
+  "type": "GROUP",
+  "createdById": 1,
+  "createdAt": "2026-03-27T10:00:00",
+  "updatedAt": "2026-03-27T10:00:00"
+}
 ```
+
+Error responses:
+
+- `404 Not Found` — room not found
+
+### Update Group Room
+
+`POST /api/rooms/room/{roomId}`
+
+Updates a group room's name, description, and/or member list. All fields are optional — send only what needs to change.
+
+Request body:
+
+```json
+{
+  "name": "New Name",
+  "description": "Updated description",
+  "userId": [4, 5]
+}
+```
+
+Fields:
+
+- `name` — new room name (optional)
+- `description` — new description (optional)
+- `userId` — list of user IDs to add to the room (optional)
+
+Response (`200 OK`):
+
+```json
+{
+  "id": 1,
+  "name": "New Name",
+  "description": "Updated description",
+  "members": [...],
+  "messages": [],
+  "type": "GROUP",
+  "createdById": 1,
+  "createdAt": "2026-03-23T16:00:00",
+  "updatedAt": "2026-03-27T11:00:00"
+}
+```
+
+Error responses:
+
+- `400 Bad Request` — invalid request body
+- `401 Unauthorized` — not authenticated
+- `403 Forbidden` — not authorized to update this room
+- `404 Not Found` — room or one or more users not found
+- `409 Conflict` — duplicate members or room name
 
 ### Remove Users From Room
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { MessageSquare, PanelLeftClose, Plus, Search, Settings, UserCircle, UserPlus, Users } from 'lucide-react'
+import { MessageSquare, PanelLeftClose, Plus, Search, Settings, UserPlus, Users } from 'lucide-react'
 import type { ChatSection } from '../../types/chat'
+import { resolveAssetUrl } from '../../lib/config'
 
 export type SidebarView = ChatSection | 'people' | 'friend-requests' | 'profile' | 'settings'
 
@@ -8,6 +9,8 @@ type SidebarProps = {
 	activeView: SidebarView
 	onSectionChange: (section: SidebarView) => void
 	onNewChat: (section: ChatSection) => void
+	currentUserName?: string
+	currentUserProfileImageUrl?: string
 	className?: string
 	onToggleCollapse?: () => void
 	showCollapseButton?: boolean
@@ -17,6 +20,8 @@ export function Sidebar({
 	activeView,
 	onSectionChange,
 	onNewChat,
+	currentUserName,
+	currentUserProfileImageUrl,
 	className = '',
 	onToggleCollapse,
 	showCollapseButton = false,
@@ -58,6 +63,15 @@ export function Sidebar({
 		onNewChat(section)
 		setIsNewChatMenuOpen(false)
 	}
+
+	const profileAvatarUrl = resolveAssetUrl(currentUserProfileImageUrl)
+	const profileName = (currentUserName ?? 'Profile').trim() || 'Profile'
+	const profileInitials = profileName
+		.split(' ')
+		.map((part) => part[0]?.toUpperCase())
+		.filter(Boolean)
+		.slice(0, 2)
+		.join('') || 'PR'
 
 	return (
 		<aside className={`motion-enter w-full shrink-0 border-r border-[var(--border)] bg-[var(--bg-soft)] px-4 py-5 md:w-[280px] lg:w-[248px] ${className}`}>
@@ -147,8 +161,14 @@ export function Sidebar({
 								: 'font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
 						}`}
 					>
-						<UserCircle size={17} />
-						Profile
+						<div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--avatar-neutral-bg)] text-[11px] font-semibold text-white">
+							{profileAvatarUrl ? (
+								<img src={profileAvatarUrl} alt={profileName} className="h-full w-full object-cover" />
+							) : (
+								profileInitials
+							)}
+						</div>
+						<span className="truncate">{profileName}</span>
 					</button>
 				</nav>
 

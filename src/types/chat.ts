@@ -19,6 +19,7 @@ export type Conversation = {
 	id: number
 	section: ChatSection
 	name: string
+	description?: string
 	subtitle: string
 	time: string
 	preview: string

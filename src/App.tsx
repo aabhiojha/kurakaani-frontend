@@ -12,8 +12,7 @@ import type { SidebarView } from './components/layout/Sidebar'
 import { buildSessionFromAuth, getCurrentUser, loginWithPassword, logout, registerWithPassword, saveSession, uploadProfileImage } from './services/authService'
 import { ChatSocketService, type ServerMessage } from './services/chatSocketService'
 import { cancelFriendRequest, getFriends, getIncomingFriendRequests, getSentFriendRequests, respondToFriendRequest, sendFriendRequest } from './services/friendService'
-import { addUsersToRoom, createRoom, getRoomMembers, getRoomMessages, getRooms, uploadRoomMedia } from './services/roomService'
-import { conversationMessages, conversationsBySection } from './data/chatData'
+import { addUsersToRoom, createGroupRoom, createOrGetDirectRoom, getRoomMembers, getRoomMessages, getRooms, removeUsersFromRoom, updateGroupRoom, upgradeRoomToGroup, uploadRoomMedia } from './services/roomService'
 import { GLOBAL_ROOM_ID } from './lib/config'
 import { getSession } from './lib/session'
 import type { Conversation, ChatSection, Message } from './types/chat'
@@ -37,41 +36,46 @@ const isSidebarView = (value: string | null): value is SidebarView => {
 }
 
 const loadPersistedConversations = (): Record<ChatSection, Conversation[]> => {
+	const emptyState: Record<ChatSection, Conversation[]> = {
+		direct: [],
+		groups: [],
+	}
+
 	if (typeof window === 'undefined') {
-		return conversationsBySection
+		return emptyState
 	}
 
 	try {
 		const raw = window.localStorage.getItem(CONVERSATIONS_STATE_STORAGE_KEY)
 		if (!raw) {
-			return conversationsBySection
+			return emptyState
 		}
 
 		const parsed = JSON.parse(raw) as Record<ChatSection, Conversation[]>
 		if (!Array.isArray(parsed?.direct) || !Array.isArray(parsed?.groups)) {
-			return conversationsBySection
+			return emptyState
 		}
 
 		return parsed
 	} catch {
-		return conversationsBySection
+		return emptyState
 	}
 }
 
 const loadPersistedMessages = (): Record<number, Message[]> => {
 	if (typeof window === 'undefined') {
-		return conversationMessages
+		return {}
 	}
 
 	try {
 		const raw = window.localStorage.getItem(MESSAGES_STATE_STORAGE_KEY)
 		if (!raw) {
-			return conversationMessages
+			return {}
 		}
 
 		return JSON.parse(raw) as Record<number, Message[]>
 	} catch {
-		return conversationMessages
+		return {}
 	}
 }
 
@@ -131,6 +135,7 @@ const mapRoomToConversation = (room: RoomSummaryResponse): Conversation => {
 		id: room.id,
 		section: isGroup ? 'groups' : 'direct',
 		name: room.name,
+		description: room.description,
 		subtitle: isGroup ? `${room.memberCount} MEMBERS` : 'DIRECT MESSAGE',
 		time,
 		preview,
@@ -271,6 +276,8 @@ function App() {
 	const isDesktop = viewportWidth >= 1024
 
 	const activeConversations = conversationsState[activeSection]
+	const sidebarUserName = currentUserProfile?.userName ?? session?.user.name
+	const sidebarUserProfileImageUrl = currentUserProfile?.profileImageUrl ?? session?.user.profileImageUrl
 
 	const activeConversation = useMemo(
 		() => {
@@ -331,6 +338,7 @@ function App() {
 			id: roomId,
 			section: 'groups',
 			name,
+			description,
 			subtitle: 'NEW GROUP',
 			time: 'Now',
 			preview: description || 'No messages yet',
@@ -371,7 +379,7 @@ function App() {
 		}
 
 		try {
-			const room = (await createRoom({
+			const room = (await createGroupRoom({
 				name,
 				description,
 				type: 'GROUP',
@@ -398,6 +406,7 @@ function App() {
 			id: roomId,
 			section: 'direct',
 			name,
+			description,
 			subtitle: 'DIRECT MESSAGE',
 			time: 'Now',
 			preview: description || 'No messages yet',
@@ -438,19 +447,20 @@ function App() {
 			return { ok: true }
 		}
 
+		const userId = Number(name.trim())
+		if (!Number.isInteger(userId) || userId <= 0) {
+			return { ok: false, error: 'Enter a valid user ID to create a direct chat.' }
+		}
+
 		try {
-			const room = (await createRoom({
-				name,
-				description,
-				type: 'DM',
-			})) as { id?: number }
+			const room = (await createOrGetDirectRoom(userId)) as { id?: number }
 
 			const roomId = typeof room?.id === 'number' ? room.id : Date.now()
-			createDirectConversation(roomId, name, description)
-			setBackendStatus(`Direct chat "${name}" created on backend.`)
+			createDirectConversation(roomId, `User #${userId}`, description)
+			setBackendStatus(`Direct chat with user ${userId} created on backend.`)
 			return { ok: true }
 		} catch {
-			return { ok: false, error: 'Backend direct chat creation failed. Please try again.' }
+			return { ok: false, error: 'Backend direct chat creation failed. Use a valid target user ID.' }
 		}
 	}
 
@@ -511,6 +521,9 @@ function App() {
 
 					setBackendStatus(`Loaded ${rooms.length} rooms from backend.`)
 				} else {
+					setConversationsState({ direct: [], groups: [] })
+					setMessagesByConversation({})
+					setSelectedConversationId(null)
 					setBackendStatus('No backend rooms found yet. Create a room to start chatting.')
 				}
 			} catch {
@@ -658,17 +671,104 @@ function App() {
 				[roomId]: members,
 			}))
 			setRoomMembersStatus(`Loaded ${members.length} member${members.length === 1 ? '' : 's'} for room ${roomId}.`)
+			return members
 		} catch {
 			setRoomMembersStatus('Failed to load room members.')
+			return [] as RoomMemberResponse[]
 		} finally {
 			setIsRoomMembersLoading(false)
 		}
 	}
 
+	const updateConversationSummary = (roomId: number, updates: { name?: string; description?: string; memberCount?: number }) => {
+		setConversationsState((previous) => {
+			const applyUpdate = (conversation: Conversation): Conversation => {
+				if (conversation.id !== roomId) {
+					return conversation
+				}
+
+				const nextName = updates.name ?? conversation.name
+				const nextDescription = updates.description ?? conversation.description
+				const nextSubtitle = conversation.isGroup && typeof updates.memberCount === 'number'
+					? `${updates.memberCount} MEMBERS`
+					: conversation.subtitle
+
+				return {
+					...conversation,
+					name: nextName,
+					description: nextDescription,
+					subtitle: nextSubtitle,
+					preview: nextDescription || conversation.preview,
+					avatar: getAvatarFromName(nextName, conversation.isGroup ? 'GR' : 'DM'),
+				}
+			}
+
+			return {
+				...previous,
+				direct: previous.direct.map(applyUpdate),
+				groups: previous.groups.map(applyUpdate),
+			}
+		})
+	}
+
 	const handleAddUsersToRoom = async (conversationId: number, userIds: number[]) => {
+		const conversation = conversationsState.direct.find((item) => item.id === conversationId)
+			?? conversationsState.groups.find((item) => item.id === conversationId)
+
+		if (conversation && !conversation.isGroup) {
+			await upgradeRoomToGroup(conversationId, userIds)
+			setConversationsState((previous) => {
+				const existingDirect = previous.direct.find((item) => item.id === conversationId)
+				if (!existingDirect) {
+					return previous
+				}
+
+				const upgradedConversation: Conversation = {
+					...existingDirect,
+					section: 'groups',
+					isGroup: true,
+					subtitle: 'GROUP',
+				}
+
+				return {
+					...previous,
+					direct: previous.direct.filter((item) => item.id !== conversationId),
+					groups: [upgradedConversation, ...previous.groups.filter((item) => item.id !== conversationId)],
+				}
+			})
+			setActiveView('groups')
+		}
+
 		await addUsersToRoom(conversationId, userIds)
-		await loadRoomMembers(conversationId)
+		const members = await loadRoomMembers(conversationId)
+		updateConversationSummary(conversationId, { memberCount: members.length })
 		setBackendStatus(`Added ${userIds.length} user${userIds.length === 1 ? '' : 's'} to room ${conversationId}.`)
+	}
+
+	const handleUpdateRoomDetails = async (conversationId: number, updates: { name?: string; description?: string }) => {
+		const payload = {
+			...(updates.name ? { name: updates.name } : {}),
+			...(typeof updates.description === 'string' ? { description: updates.description } : {}),
+		}
+
+		const updatedRoom = await updateGroupRoom(conversationId, payload)
+		updateConversationSummary(conversationId, {
+			name: updatedRoom.name,
+			description: updatedRoom.description,
+			memberCount: updatedRoom.members.length,
+		})
+		setRoomMembersByConversation((previous) => ({
+			...previous,
+			[conversationId]: updatedRoom.members,
+		}))
+		setBackendStatus(`Updated room ${conversationId} settings.`)
+	}
+
+	const handleRemoveMembersFromRoom = async (conversationId: number, memberIds: number[]) => {
+		await removeUsersFromRoom(conversationId, memberIds)
+		const members = await loadRoomMembers(conversationId)
+		updateConversationSummary(conversationId, { memberCount: members.length })
+		setBackendStatus(`Removed ${memberIds.length} member${memberIds.length === 1 ? '' : 's'} from room ${conversationId}.`)
 	}
 
 	const getErrorMessage = (error: unknown, fallbackMessage: string): string => {
@@ -928,14 +1028,14 @@ function App() {
 	}, [currentUserProfile, session])
 
 	useEffect(() => {
-		if (!session?.accessToken || !activeConversation || !activeConversation.isGroup) {
+		if (!session?.accessToken || !activeConversation) {
 			setRoomMembersStatus(null)
 			setIsRoomMembersLoading(false)
 			return
 		}
 
 		void loadRoomMembers(activeConversation.id)
-	}, [activeConversation?.id, activeConversation?.isGroup, session?.accessToken])
+		}, [activeConversation?.id, session?.accessToken])
 
 	useEffect(() => {
 		if (!session?.accessToken) {
@@ -1201,6 +1301,8 @@ function App() {
 						activeView={activeView}
 						onSectionChange={handleSectionChange}
 						onNewChat={handleNewChat}
+						currentUserName={sidebarUserName}
+						currentUserProfileImageUrl={sidebarUserProfileImageUrl}
 						className="h-full w-full max-w-none border-r-0"
 					/>
 				)
@@ -1225,12 +1327,15 @@ function App() {
 				<ChatView
 					conversation={activeConversation}
 					messages={activeMessages}
+					currentUserId={currentUserProfile?.id ?? session?.user.id}
 					roomMembers={activeRoomMembers}
 					isRoomMembersLoading={isRoomMembersLoading}
 					roomMembersStatus={roomMembersStatus}
 					onSendMessage={handleSendMessage}
 					onUploadMedia={handleUploadMedia}
 					onAddUsersToRoom={handleAddUsersToRoom}
+					onUpdateRoomDetails={handleUpdateRoomDetails}
+					onRemoveMembersFromRoom={handleRemoveMembersFromRoom}
 					isSendDisabled={Boolean(session?.accessToken) && !isSocketConnected}
 				/>
 			)
@@ -1252,12 +1357,15 @@ function App() {
 					<ChatView
 						conversation={activeConversation}
 						messages={activeMessages}
+						currentUserId={currentUserProfile?.id ?? session?.user.id}
 						roomMembers={activeRoomMembers}
 						isRoomMembersLoading={isRoomMembersLoading}
 						roomMembersStatus={roomMembersStatus}
 						onSendMessage={handleSendMessage}
 						onUploadMedia={handleUploadMedia}
 						onAddUsersToRoom={handleAddUsersToRoom}
+						onUpdateRoomDetails={handleUpdateRoomDetails}
+						onRemoveMembersFromRoom={handleRemoveMembersFromRoom}
 						isSendDisabled={Boolean(session?.accessToken) && !isSocketConnected}
 					/>
 				</>
@@ -1279,12 +1387,15 @@ function App() {
 				<ChatView
 					conversation={activeConversation}
 					messages={activeMessages}
+					currentUserId={currentUserProfile?.id ?? session?.user.id}
 					roomMembers={activeRoomMembers}
 					isRoomMembersLoading={isRoomMembersLoading}
 					roomMembersStatus={roomMembersStatus}
 					onSendMessage={handleSendMessage}
 					onUploadMedia={handleUploadMedia}
 					onAddUsersToRoom={handleAddUsersToRoom}
+					onUpdateRoomDetails={handleUpdateRoomDetails}
+					onRemoveMembersFromRoom={handleRemoveMembersFromRoom}
 					isSendDisabled={Boolean(session?.accessToken) && !isSocketConnected}
 				/>
 			</>
@@ -1312,6 +1423,8 @@ function App() {
 						activeView={activeView}
 						onSectionChange={handleSectionChange}
 						onNewChat={handleNewChat}
+						currentUserName={sidebarUserName}
+						currentUserProfileImageUrl={sidebarUserProfileImageUrl}
 						className="h-full"
 						onToggleCollapse={() => setIsDesktopSidebarCollapsed(true)}
 						showCollapseButton
@@ -1337,6 +1450,8 @@ function App() {
 								activeView={activeView}
 								onSectionChange={handleSectionChange}
 								onNewChat={handleNewChat}
+								currentUserName={sidebarUserName}
+								currentUserProfileImageUrl={sidebarUserProfileImageUrl}
 								className="h-full max-w-[84vw] bg-[var(--bg-soft)]"
 							/>
 						</div>

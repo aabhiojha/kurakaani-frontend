@@ -16,7 +16,7 @@ export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext 
 	const isRight = message.isSent
 	const mediaUrl = resolveAssetUrl(message.mediaUrl)
 	const senderAvatarUrl = resolveAssetUrl(message.senderProfileImageUrl)
-	const avatarTopSpacingClass = isGroupedWithPrevious ? 'mt-0' : 'mt-5'
+	const avatarTopSpacingClass = isGroupedWithPrevious ? 'mt-0' : 'mt-4'
 
 	useEffect(() => {
 		if (!isMetaVisible) {
@@ -54,7 +54,7 @@ export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext 
 
 	return (
 		<>
-			<div className={`motion-enter-soft flex ${isRight ? 'justify-end' : 'justify-start'} ${isGroupedWithPrevious ? 'mt-1' : 'mt-4'}`}>
+			<div className={`motion-enter-soft flex ${isRight ? 'justify-end' : 'justify-start'} ${isGroupedWithPrevious ? 'mt-0.5' : 'mt-2.5'}`}>
 				<div className={`flex max-w-[80%] items-start gap-2 ${isRight ? 'flex-row-reverse' : 'flex-row'}`}>
 					{isGroupedWithNext ? (
 						<div className="h-8 w-8 shrink-0" />
@@ -76,7 +76,7 @@ export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext 
 						</div>
 					)}
 					<div className={`${isRight ? 'items-end' : 'items-start'} flex flex-col`}>
-						{!isGroupedWithPrevious && <span className="mb-1 px-1 text-xs font-medium text-[var(--text-secondary)]">{message.senderName}</span>}
+						{!isGroupedWithPrevious && <span className="mb-0.5 px-1 text-xs font-medium text-[var(--text-secondary)]">{message.senderName}</span>}
 						<div ref={messageMetaRef} className="group relative">
 							<div
 								onClick={() => setIsMetaVisible((previous) => !previous)}
@@ -88,7 +88,7 @@ export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext 
 								}}
 								role="button"
 								tabIndex={0}
-								className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
+								className={`rounded-2xl px-3.5 py-2 text-sm leading-relaxed shadow-sm ${
 									isRight
 										? 'rounded-br-sm bg-[var(--bubble-sent)] text-white'
 										: 'rounded-bl-sm bg-[var(--bubble-received)] text-[var(--text-primary)]'
@@ -138,7 +138,7 @@ export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext 
 							<button
 								type="button"
 								onClick={() => setIsMetaVisible((previous) => !previous)}
-								className="mt-1 px-1 text-xs text-[var(--text-muted)]"
+								className="mt-0.5 px-1 text-xs text-[var(--text-muted)]"
 							>
 								{message.timestamp}
 							</button>
