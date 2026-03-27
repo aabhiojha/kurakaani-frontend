@@ -105,7 +105,9 @@ export const conversationMessages: Record<number, Message[]> = {
 			senderAvatar: 'EV',
 			text: 'Great — here is the glassmorphism direction for the dashboard module.',
 			timestamp: '12:45 PM',
-			withImage: true,
+			messageType: 'IMAGE',
+			mediaUrl: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80',
+			mediaFileName: 'dashboard-direction.jpg',
 		},
 		{
 			id: 4,

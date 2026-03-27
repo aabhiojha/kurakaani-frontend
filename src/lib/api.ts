@@ -42,11 +42,12 @@ async function parseResponseBody<T>(response: Response): Promise<T> {
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
 	const session = getSession()
 	const token = session?.accessToken
+	const isFormData = init.body instanceof FormData
 
 	const response = await fetch(buildApiUrl(path), {
 		...init,
 		headers: {
-			'Content-Type': 'application/json',
+			...(isFormData ? {} : { 'Content-Type': 'application/json' }),
 			...(token ? { Authorization: `Bearer ${token}` } : {}),
 			...(init.headers ?? {}),
 		},
@@ -61,10 +62,12 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 }
 
 export async function publicFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+	const isFormData = init.body instanceof FormData
+
 	const response = await fetch(buildApiUrl(path), {
 		...init,
 		headers: {
-			'Content-Type': 'application/json',
+			...(isFormData ? {} : { 'Content-Type': 'application/json' }),
 			...(init.headers ?? {}),
 		},
 	})

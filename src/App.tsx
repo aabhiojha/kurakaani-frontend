@@ -2,19 +2,24 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { LayoutPanelLeft, MessageSquare, MessagesSquare, PanelLeftClose } from 'lucide-react'
 import { AuthPage } from './components/auth/AuthPage'
 import { ChatView } from './components/chat/ChatView'
+import { FindPeoplePage } from './components/layout/FindPeoplePage'
+import { FriendRequestsPage } from './components/layout/FriendRequestsPage'
 import { ProfilePage } from './components/layout/ProfilePage'
 import { RecentMessagesPanel } from './components/layout/RecentMessagesPanel'
 import { SettingsPage } from './components/layout/SettingsPage'
 import { Sidebar } from './components/layout/Sidebar'
 import type { SidebarView } from './components/layout/Sidebar'
-import { buildSessionFromAuth, getCurrentUser, loginWithPassword, logout, registerWithPassword, saveSession } from './services/authService'
+import { buildSessionFromAuth, getCurrentUser, loginWithPassword, logout, registerWithPassword, saveSession, uploadProfileImage } from './services/authService'
 import { ChatSocketService, type ServerMessage } from './services/chatSocketService'
-import { createRoom, getRoomMessages, getRooms } from './services/roomService'
+import { cancelFriendRequest, getFriends, getIncomingFriendRequests, getSentFriendRequests, respondToFriendRequest, sendFriendRequest } from './services/friendService'
+import { addUsersToRoom, createRoom, getRoomMembers, getRoomMessages, getRooms, uploadRoomMedia } from './services/roomService'
 import { conversationMessages, conversationsBySection } from './data/chatData'
+import { GLOBAL_ROOM_ID } from './lib/config'
 import { getSession } from './lib/session'
 import type { Conversation, ChatSection, Message } from './types/chat'
 import type { CurrentUserResponse, SessionState } from './types/api/session'
-import type { RoomMessageResponse, RoomSummaryResponse } from './types/api/room'
+import type { FriendshipResponse } from './types/api/friend'
+import type { RoomMemberResponse, RoomMessageResponse, RoomSummaryResponse } from './types/api/room'
 
 const isChatSection = (view: SidebarView): view is ChatSection => view === 'direct' || view === 'groups'
 const THEME_STORAGE_KEY = 'kurakaani-theme'
@@ -28,7 +33,7 @@ type MobilePane = 'sidebar' | 'list' | 'detail'
 type AuthActionResult = { ok: true; message?: string } | { ok: false; error: string }
 
 const isSidebarView = (value: string | null): value is SidebarView => {
-	return value === 'direct' || value === 'groups' || value === 'settings' || value === 'profile'
+	return value === 'direct' || value === 'groups' || value === 'people' || value === 'friend-requests' || value === 'settings' || value === 'profile'
 }
 
 const loadPersistedConversations = (): Record<ChatSection, Conversation[]> => {
@@ -94,7 +99,7 @@ const toConversationTime = (timestamp?: string): string => {
 	return parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-const normalizeMessageContent = (value: string): string => value.trim().replace(/\s+/g, ' ').toLowerCase()
+const normalizeMessageContent = (value?: string | null): string => (value ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
 
 const normalizeUserName = (value?: string): string => (value ?? '').trim().toLowerCase()
 
@@ -115,7 +120,11 @@ const isMessageFromCurrentUser = (
 
 const mapRoomToConversation = (room: RoomSummaryResponse): Conversation => {
 	const isGroup = room.type === 'GROUP'
-	const preview = room.recentMessage?.content || room.description || 'No messages yet'
+	const preview = room.recentMessage?.messageType === 'IMAGE'
+		? 'Shared an image'
+		: room.recentMessage?.messageType === 'VIDEO'
+			? 'Shared a video'
+			: room.recentMessage?.content || room.description || 'No messages yet'
 	const time = room.recentMessage ? toConversationTime(room.recentMessage.sentAt) : ''
 
 	return {
@@ -147,10 +156,46 @@ const mapRoomMessagesToMessages = (
 			isSent: fromCurrentUser,
 			senderName: fromCurrentUser ? 'You' : senderName,
 			senderAvatar: fromCurrentUser ? 'YO' : getAvatarFromName(senderName, roomType === 'GROUP' ? 'GR' : 'DM'),
-			text: message.content,
+			senderProfileImageUrl: message.userInfo?.profileImageUrl ?? undefined,
+			senderId: message.userInfo?.id,
+			text: message.content ?? '',
 			timestamp: toConversationTime(message.createdAt),
+			messageType: message.messageType,
+			mediaUrl: message.mediaUrl ?? undefined,
+			mediaContentType: message.mediaContentType ?? undefined,
+			mediaFileName: message.mediaFileName ?? undefined,
 		}
 	})
+}
+
+const getKnownSenderName = (messages: Message[], senderId?: number, fallback?: string): string => {
+	if (typeof senderId !== 'number' || senderId <= 0) {
+		return fallback ?? 'Unknown user'
+	}
+
+	for (let index = messages.length - 1; index >= 0; index -= 1) {
+		const message = messages[index]
+		if (message.senderId === senderId && message.senderName && message.senderName !== 'You') {
+			return message.senderName
+		}
+	}
+
+	return fallback ?? `User #${senderId}`
+}
+
+const getKnownSenderProfileImageUrl = (messages: Message[], senderId?: number): string | undefined => {
+	if (typeof senderId !== 'number' || senderId <= 0) {
+		return undefined
+	}
+
+	for (let index = messages.length - 1; index >= 0; index -= 1) {
+		const message = messages[index]
+		if (message.senderId === senderId && message.senderProfileImageUrl) {
+			return message.senderProfileImageUrl
+		}
+	}
+
+	return undefined
 }
 
 function App() {
@@ -205,9 +250,20 @@ function App() {
 	const [isSidebarDrawerOpen, setIsSidebarDrawerOpen] = useState(false)
 	const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false)
 	const [isSocketConnected, setIsSocketConnected] = useState(false)
+	const [currentUserProfile, setCurrentUserProfile] = useState<CurrentUserResponse | undefined>(undefined)
+	const [incomingFriendRequests, setIncomingFriendRequests] = useState<FriendshipResponse[]>([])
+	const [sentFriendRequests, setSentFriendRequests] = useState<FriendshipResponse[]>([])
+	const [friends, setFriends] = useState<FriendshipResponse[]>([])
+	const [isFriendshipsLoading, setIsFriendshipsLoading] = useState(false)
+	const [friendshipStatus, setFriendshipStatus] = useState<string | null>(null)
+	const [roomMembersByConversation, setRoomMembersByConversation] = useState<Record<number, RoomMemberResponse[]>>({})
+	const [roomMembersStatus, setRoomMembersStatus] = useState<string | null>(null)
+	const [isRoomMembersLoading, setIsRoomMembersLoading] = useState(false)
 	const chatSocketRef = useRef<ChatSocketService>(new ChatSocketService())
 	const subscribedRoomIdRef = useRef<number | null>(null)
 	const pendingSentMessagesRef = useRef<Map<number, Map<string, number>>>(new Map())
+	const pendingMediaUploadsRef = useRef<Map<number, number>>(new Map())
+	const attemptedGlobalJoinUserIdsRef = useRef<Set<number>>(new Set())
 	const activeSection: ChatSection = isChatSection(activeView) ? activeView : 'direct'
  	const isDarkMode = themeMode === 'system' ? systemPrefersDark : themeMode === 'dark'
 	const isMobile = viewportWidth < 768
@@ -232,6 +288,7 @@ function App() {
 	)
 
 	const activeMessages = activeConversation ? (messagesByConversation[activeConversation.id] ?? []) : []
+	const activeRoomMembers = activeConversation ? (roomMembersByConversation[activeConversation.id] ?? []) : []
 
 	const handleSectionChange = (section: SidebarView) => {
 		setActiveView(section)
@@ -385,7 +442,7 @@ function App() {
 			const room = (await createRoom({
 				name,
 				description,
-				type: 'DIRECT',
+				type: 'DM',
 			})) as { id?: number }
 
 			const roomId = typeof room?.id === 'number' ? room.id : Date.now()
@@ -519,12 +576,99 @@ function App() {
 						isSent: true,
 						senderName: 'You',
 						senderAvatar: 'YO',
+						senderProfileImageUrl: currentUserProfile?.profileImageUrl ?? session?.user.profileImageUrl,
+						senderId: session?.user.id,
 						text,
 						timestamp,
 					},
 				],
 			}
 		})
+	}
+
+	const handleUploadMedia = async (conversationId: number, file: File, caption?: string) => {
+		if (!session?.accessToken) {
+			setBackendStatus('Sign in to upload images or videos.')
+			return
+		}
+
+		pendingMediaUploadsRef.current.set(conversationId, (pendingMediaUploadsRef.current.get(conversationId) ?? 0) + 1)
+
+		try {
+			const uploadedMessage = await uploadRoomMedia(conversationId, file, caption)
+			const pendingMediaCount = pendingMediaUploadsRef.current.get(conversationId) ?? 0
+			if (pendingMediaCount <= 1) {
+				pendingMediaUploadsRef.current.delete(conversationId)
+			} else {
+				pendingMediaUploadsRef.current.set(conversationId, pendingMediaCount - 1)
+			}
+
+			setMessagesByConversation((previous) => {
+				const currentMessages = previous[conversationId] ?? []
+				const hasDuplicate = currentMessages.some((message) => message.id === uploadedMessage.id)
+				if (hasDuplicate) {
+					return previous
+				}
+
+				const timestamp = uploadedMessage.createdAt
+					? new Date(uploadedMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+					: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+				return {
+					...previous,
+					[conversationId]: [
+						...currentMessages,
+						{
+							id: uploadedMessage.id,
+							isSent: true,
+							senderName: 'You',
+							senderAvatar: 'YO',
+							senderProfileImageUrl: currentUserProfile?.profileImageUrl ?? session.user.profileImageUrl,
+							senderId: session.user.id,
+							text: uploadedMessage.content ?? '',
+							timestamp,
+							messageType: uploadedMessage.messageType,
+							mediaUrl: uploadedMessage.mediaUrl ?? undefined,
+							mediaContentType: uploadedMessage.mediaContentType ?? undefined,
+							mediaFileName: uploadedMessage.mediaFileName ?? undefined,
+						},
+					],
+				}
+			})
+
+			setBackendStatus(`Uploaded ${file.type.startsWith('video/') ? 'video' : 'image'} to room ${conversationId}.`)
+		} catch (error) {
+			const pendingMediaCount = pendingMediaUploadsRef.current.get(conversationId) ?? 0
+			if (pendingMediaCount <= 1) {
+				pendingMediaUploadsRef.current.delete(conversationId)
+			} else {
+				pendingMediaUploadsRef.current.set(conversationId, pendingMediaCount - 1)
+			}
+			setBackendStatus(getErrorMessage(error, 'Media upload failed. Please try again.'))
+		}
+	}
+
+	const loadRoomMembers = async (roomId: number) => {
+		setIsRoomMembersLoading(true)
+
+		try {
+			const members = await getRoomMembers(roomId)
+			setRoomMembersByConversation((previous) => ({
+				...previous,
+				[roomId]: members,
+			}))
+			setRoomMembersStatus(`Loaded ${members.length} member${members.length === 1 ? '' : 's'} for room ${roomId}.`)
+		} catch {
+			setRoomMembersStatus('Failed to load room members.')
+		} finally {
+			setIsRoomMembersLoading(false)
+		}
+	}
+
+	const handleAddUsersToRoom = async (conversationId: number, userIds: number[]) => {
+		await addUsersToRoom(conversationId, userIds)
+		await loadRoomMembers(conversationId)
+		setBackendStatus(`Added ${userIds.length} user${userIds.length === 1 ? '' : 's'} to room ${conversationId}.`)
 	}
 
 	const getErrorMessage = (error: unknown, fallbackMessage: string): string => {
@@ -536,28 +680,135 @@ function App() {
 		return typeof maybeError.message === 'string' && maybeError.message.length > 0 ? maybeError.message : fallbackMessage
 	}
 
+	const loadFriendships = async () => {
+		if (!session?.accessToken) {
+			setIncomingFriendRequests([])
+			setSentFriendRequests([])
+			setFriends([])
+			return
+		}
+
+		setIsFriendshipsLoading(true)
+
+		try {
+			const [incoming, sent, accepted] = await Promise.all([
+				getIncomingFriendRequests(),
+				getSentFriendRequests(),
+				getFriends(),
+			])
+
+			setIncomingFriendRequests(incoming)
+			setSentFriendRequests(sent)
+			setFriends(accepted)
+		} catch {
+			setFriendshipStatus('Failed to load friendship data.')
+		} finally {
+			setIsFriendshipsLoading(false)
+		}
+	}
+
+	const handleSendFriendRequest = async (userId: number) => {
+		await sendFriendRequest(userId)
+		await loadFriendships()
+		setFriendshipStatus(`Friend request sent to user ${userId}.`)
+	}
+
+	const handleRespondToFriendRequest = async (userId: number, response: 'ACCEPT' | 'REJECT') => {
+		await respondToFriendRequest(userId, response)
+		await loadFriendships()
+		setFriendshipStatus(`Friend request from user ${userId} ${response === 'ACCEPT' ? 'accepted' : 'rejected'}.`)
+	}
+
+	const handleCancelFriendRequest = async (userId: number) => {
+		await cancelFriendRequest(userId)
+		await loadFriendships()
+		setFriendshipStatus(`Cancelled friend request to user ${userId}.`)
+	}
+
+	const handleUploadProfileImage = async (file: File) => {
+		if (!session?.accessToken) {
+			throw new Error('Sign in to upload a profile image.')
+		}
+
+		await uploadProfileImage(file)
+		const refreshedUser = await getCurrentUser()
+
+		setCurrentUserProfile(refreshedUser)
+		setSession((previous) => {
+			if (!previous) {
+				return previous
+			}
+
+			const nextSession: SessionState = {
+				...previous,
+				user: {
+					...previous.user,
+					id: refreshedUser.id,
+					email: refreshedUser.email,
+					name: refreshedUser.userName,
+					roles: refreshedUser.roles,
+					profileImageUrl: refreshedUser.profileImageUrl,
+				},
+			}
+
+			saveSession(nextSession)
+			return nextSession
+		})
+
+		setBackendStatus('Profile image updated successfully.')
+	}
+
+	const ensureGlobalRoomMembership = async (sessionState: SessionState, currentUser?: CurrentUserResponse) => {
+		const userId = currentUser?.id ?? sessionState.user.id
+		if (!userId || attemptedGlobalJoinUserIdsRef.current.has(userId)) {
+			return false
+		}
+
+		attemptedGlobalJoinUserIdsRef.current.add(userId)
+
+		try {
+			await addUsersToRoom(GLOBAL_ROOM_ID, [userId])
+			return true
+		} catch {
+			return false
+		}
+	}
+
+	const completeAuthenticatedSession = async (authResponse: { token: string; username: string; roles: string[] }) => {
+		let currentUser: CurrentUserResponse | undefined
+
+		try {
+			currentUser = await getCurrentUser()
+		} catch {
+			currentUser = undefined
+		}
+
+		const nextSession = buildSessionFromAuth(authResponse, currentUser)
+		saveSession(nextSession)
+		setSession(nextSession)
+		setCurrentUserProfile(currentUser)
+
+		const joinedGlobalRoom = await ensureGlobalRoomMembership(nextSession, currentUser)
+
+		setActiveView('groups')
+		setSelectedConversationId(null)
+		if (isMobile) {
+			setMobilePane('list')
+		}
+
+		setBackendStatus(
+			joinedGlobalRoom
+				? `Signed in as ${nextSession.user.name}. Joined global room ${GLOBAL_ROOM_ID}.`
+				: `Signed in as ${nextSession.user.name}. Authenticated requests enabled.`,
+		)
+	}
+
 	const handleLogin = async (username: string, password: string): Promise<AuthActionResult> => {
 		setIsAuthSubmitting(true)
 
 		try {
 			const authResponse = await loginWithPassword({ username, password })
-			let currentUser: CurrentUserResponse | undefined
-
-			try {
-				currentUser = await getCurrentUser()
-			} catch {
-				currentUser = undefined
-			}
-
-			const nextSession = buildSessionFromAuth(authResponse, currentUser)
-			saveSession(nextSession)
-			setSession(nextSession)
-			setActiveView('groups')
-			setSelectedConversationId(null)
-			if (isMobile) {
-				setMobilePane('list')
-			}
-			setBackendStatus(`Signed in as ${nextSession.user.name}. Authenticated requests enabled.`)
+			await completeAuthenticatedSession(authResponse)
 			return { ok: true }
 		} catch (error) {
 			return {
@@ -574,8 +825,9 @@ function App() {
 
 		try {
 			await registerWithPassword({ username, email, password })
-			setBackendStatus('Registration successful. You can now log in with your credentials.')
-			return { ok: true, message: 'Registration successful. Please log in.' }
+			const authResponse = await loginWithPassword({ username, password })
+			await completeAuthenticatedSession(authResponse)
+			return { ok: true, message: 'Registration successful. You have been added to the global chat.' }
 		} catch (error) {
 			return {
 				ok: false,
@@ -590,7 +842,10 @@ function App() {
 		logout()
 		chatSocketRef.current.disconnect()
 		subscribedRoomIdRef.current = null
+		pendingMediaUploadsRef.current.clear()
+		attemptedGlobalJoinUserIdsRef.current.clear()
 		setIsSocketConnected(false)
+		setCurrentUserProfile(undefined)
 		setSession(null)
 		setBackendStatus('Logged out. API requests now run without JWT.')
 	}
@@ -626,8 +881,67 @@ function App() {
 
 	useEffect(() => {
 		if (!session?.accessToken) {
+			setCurrentUserProfile(undefined)
+			setIncomingFriendRequests([])
+			setSentFriendRequests([])
+			setFriends([])
+			return
+		}
+
+		let isCancelled = false
+
+		const syncCurrentUser = async () => {
+			try {
+				const user = await getCurrentUser()
+				if (!isCancelled) {
+					setCurrentUserProfile(user)
+				}
+			} catch {
+				if (!isCancelled) {
+					setCurrentUserProfile(undefined)
+				}
+			}
+		}
+
+		void syncCurrentUser()
+
+		return () => {
+			isCancelled = true
+		}
+	}, [session?.accessToken])
+
+	useEffect(() => {
+		if (!session?.accessToken) {
+			setFriendshipStatus(null)
+			return
+		}
+
+		void loadFriendships()
+	}, [session?.accessToken])
+
+	useEffect(() => {
+		if (!session?.accessToken) {
+			return
+		}
+
+		void ensureGlobalRoomMembership(session, currentUserProfile)
+	}, [currentUserProfile, session])
+
+	useEffect(() => {
+		if (!session?.accessToken || !activeConversation || !activeConversation.isGroup) {
+			setRoomMembersStatus(null)
+			setIsRoomMembersLoading(false)
+			return
+		}
+
+		void loadRoomMembers(activeConversation.id)
+	}, [activeConversation?.id, activeConversation?.isGroup, session?.accessToken])
+
+	useEffect(() => {
+		if (!session?.accessToken) {
 			chatSocketRef.current.disconnect()
 			subscribedRoomIdRef.current = null
+			pendingMediaUploadsRef.current.clear()
 			setIsSocketConnected(false)
 			return
 		}
@@ -652,7 +966,7 @@ function App() {
 	}, [session?.accessToken])
 
 	useEffect(() => {
-		if (!session?.accessToken || activeView === 'settings' || activeView === 'profile' || !activeConversation) {
+		if (!session?.accessToken || !isChatSection(activeView) || !activeConversation) {
 			const previousRoomId = subscribedRoomIdRef.current
 			if (previousRoomId !== null) {
 				chatSocketRef.current.unsubscribe(previousRoomId)
@@ -676,8 +990,11 @@ function App() {
 				const normalizedContent = normalizeMessageContent(payload.content)
 				const pendingByRoom = pendingSentMessagesRef.current.get(targetRoomId)
 				const pendingCount = normalizedContent ? (pendingByRoom?.get(normalizedContent) ?? 0) : 0
+				const isMediaMessage = payload.messageType === 'IMAGE' || payload.messageType === 'VIDEO'
+				const pendingMediaCount = isMediaMessage ? (pendingMediaUploadsRef.current.get(targetRoomId) ?? 0) : 0
 				const fromCurrentUserByPayload = payload.senderId === session.user.id
-				const fromCurrentUser = fromCurrentUserByPayload || pendingCount > 0
+				const fromCurrentUserByPendingMedia = isMediaMessage && pendingMediaCount > 0
+				const fromCurrentUser = fromCurrentUserByPayload || pendingCount > 0 || fromCurrentUserByPendingMedia
 
 				if (pendingByRoom && pendingCount > 0 && normalizedContent) {
 					if (pendingCount === 1) {
@@ -688,6 +1005,14 @@ function App() {
 
 					if (pendingByRoom.size === 0) {
 						pendingSentMessagesRef.current.delete(targetRoomId)
+					}
+				}
+
+				if (isMediaMessage && pendingMediaCount > 0 && fromCurrentUser) {
+					if (pendingMediaCount === 1) {
+						pendingMediaUploadsRef.current.delete(targetRoomId)
+					} else {
+						pendingMediaUploadsRef.current.set(targetRoomId, pendingMediaCount - 1)
 					}
 				}
 
@@ -702,6 +1027,15 @@ function App() {
 				const timestamp = payload.createdAt
 					? new Date(payload.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 					: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+				const senderName = fromCurrentUser
+					? 'You'
+					: getKnownSenderName(currentMessages, payload.senderId)
+				const senderProfileImageUrl = fromCurrentUser
+					? (currentUserProfile?.profileImageUrl ?? session.user.profileImageUrl)
+					: getKnownSenderProfileImageUrl(currentMessages, payload.senderId)
+				const senderAvatar = fromCurrentUser
+					? 'YO'
+					: getAvatarFromName(senderName, `U${String(payload.senderId ?? '').slice(-1) || 'S'}`)
 
 				return {
 					...prev,
@@ -710,10 +1044,16 @@ function App() {
 						{
 							id: payload.id,
 							isSent: fromCurrentUser,
-							senderName: fromCurrentUser ? 'You' : activeConversation.name,
-							senderAvatar: fromCurrentUser ? 'YO' : activeConversation.avatar,
-							text: payload.content,
+							senderName,
+							senderAvatar,
+							senderProfileImageUrl,
+							senderId: payload.senderId,
+							text: payload.content ?? '',
 							timestamp,
+							messageType: payload.messageType ?? 'TEXT',
+							mediaUrl: payload.mediaUrl ?? undefined,
+							mediaContentType: payload.mediaContentType ?? undefined,
+							mediaFileName: payload.mediaFileName ?? undefined,
 						},
 					],
 				}
@@ -798,8 +1138,47 @@ function App() {
 	}, [])
 
 	const renderMainContent = () => {
+		if (activeView === 'friend-requests') {
+			return (
+				<FriendRequestsPage
+					friendships={{
+						incoming: incomingFriendRequests,
+						sent: sentFriendRequests,
+					}}
+					friendshipStatus={friendshipStatus}
+					isFriendshipsLoading={isFriendshipsLoading}
+					onRespondToFriendRequest={handleRespondToFriendRequest}
+					onCancelFriendRequest={handleCancelFriendRequest}
+				/>
+			)
+		}
+
+		if (activeView === 'people') {
+			return (
+				<FindPeoplePage
+					currentUserId={currentUserProfile?.id ?? session?.user.id}
+					friendships={{
+						incoming: incomingFriendRequests,
+						sent: sentFriendRequests,
+						friends,
+					}}
+					onSendFriendRequest={handleSendFriendRequest}
+				/>
+			)
+		}
+
 		if (activeView === 'profile') {
-			return <ProfilePage />
+			return (
+				<ProfilePage
+					session={session}
+					currentUser={currentUserProfile}
+					friendships={{
+						friends,
+					}}
+					isFriendshipsLoading={isFriendshipsLoading}
+					onUploadProfileImage={handleUploadProfileImage}
+				/>
+			)
 		}
 
 		if (activeView === 'settings') {
@@ -846,7 +1225,12 @@ function App() {
 				<ChatView
 					conversation={activeConversation}
 					messages={activeMessages}
+					roomMembers={activeRoomMembers}
+					isRoomMembersLoading={isRoomMembersLoading}
+					roomMembersStatus={roomMembersStatus}
 					onSendMessage={handleSendMessage}
+					onUploadMedia={handleUploadMedia}
+					onAddUsersToRoom={handleAddUsersToRoom}
 					isSendDisabled={Boolean(session?.accessToken) && !isSocketConnected}
 				/>
 			)
@@ -868,7 +1252,12 @@ function App() {
 					<ChatView
 						conversation={activeConversation}
 						messages={activeMessages}
+						roomMembers={activeRoomMembers}
+						isRoomMembersLoading={isRoomMembersLoading}
+						roomMembersStatus={roomMembersStatus}
 						onSendMessage={handleSendMessage}
+						onUploadMedia={handleUploadMedia}
+						onAddUsersToRoom={handleAddUsersToRoom}
 						isSendDisabled={Boolean(session?.accessToken) && !isSocketConnected}
 					/>
 				</>
@@ -890,7 +1279,12 @@ function App() {
 				<ChatView
 					conversation={activeConversation}
 					messages={activeMessages}
+					roomMembers={activeRoomMembers}
+					isRoomMembersLoading={isRoomMembersLoading}
+					roomMembersStatus={roomMembersStatus}
 					onSendMessage={handleSendMessage}
+					onUploadMedia={handleUploadMedia}
+					onAddUsersToRoom={handleAddUsersToRoom}
 					isSendDisabled={Boolean(session?.accessToken) && !isSocketConnected}
 				/>
 			</>

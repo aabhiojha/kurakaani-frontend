@@ -1,3 +1,28 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://32.236.3.182:8080/'
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').trim()
+const parsedGlobalRoomId = Number(import.meta.env.VITE_GLOBAL_ROOM_ID ?? '1')
+export const GLOBAL_ROOM_ID = Number.isInteger(parsedGlobalRoomId) && parsedGlobalRoomId > 0 ? parsedGlobalRoomId : 1
 
 export const SESSION_STORAGE_KEY = 'kurakaani-session'
+
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0'])
+
+export const resolveAssetUrl = (value?: string | null) => {
+	if (!value) {
+		return undefined
+	}
+
+	try {
+		const runtimeBase = API_BASE_URL
+			? new URL(API_BASE_URL, window.location.origin)
+			: new URL(window.location.origin)
+		const resolved = new URL(value, runtimeBase)
+
+		if (LOCAL_HOSTS.has(resolved.hostname) && !LOCAL_HOSTS.has(window.location.hostname)) {
+			resolved.hostname = window.location.hostname
+		}
+
+		return resolved.toString()
+	} catch {
+		return value
+	}
+}

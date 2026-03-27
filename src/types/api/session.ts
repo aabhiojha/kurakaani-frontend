@@ -3,6 +3,7 @@ export type SessionUser = {
 	email: string
 	name: string
 	roles: string[]
+	profileImageUrl?: string
 }
 
 export type SessionState = {
@@ -31,6 +32,7 @@ export type CurrentUserResponse = {
 	id: number
 	userName: string
 	email: string
+	profileImageUrl?: string
 	enabled: boolean
 	roles: string[]
 	createdAt: string

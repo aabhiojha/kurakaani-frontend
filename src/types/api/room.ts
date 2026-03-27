@@ -1,5 +1,7 @@
 export type RoomType = 'GROUP' | 'DIRECT' | 'DM'
 
+export type MessageType = 'TEXT' | 'IMAGE' | 'VIDEO'
+
 export type RoomMemberResponse = {
 	roomMemberId: number
 	roomId: number
@@ -11,7 +13,11 @@ export type RoomMemberResponse = {
 export type RoomMessageResponse = {
 	id: number
 	roomId: number
-	content: string
+	content?: string | null
+	messageType: MessageType
+	mediaUrl?: string | null
+	mediaContentType?: string | null
+	mediaFileName?: string | null
 	isEdited: boolean
 	isDeleted: boolean
 	createdAt: string
@@ -19,7 +25,7 @@ export type RoomMessageResponse = {
 	userInfo: {
 		id: number
 		username: string
-		profileImageUrl?: string
+		profileImageUrl?: string | null
 	}
 }
 
@@ -27,6 +33,7 @@ export type RecentMessageResponse = {
 	id: number
 	roomId: number
 	content: string
+	messageType: MessageType
 	sentAt: string
 	sender: {
 		id: number

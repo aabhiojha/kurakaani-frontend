@@ -16,6 +16,16 @@ export const loginWithPassword = (payload: LoginRequest) =>
 
 export const getCurrentUser = () => apiFetch<CurrentUserResponse>('/api/user/me')
 
+export const uploadProfileImage = (file: File) => {
+	const formData = new FormData()
+	formData.append('file', file)
+
+	return apiFetch<void>('/api/user/profilePic/upload', {
+		method: 'POST',
+		body: formData,
+	})
+}
+
 export const buildSessionFromAuth = (authResponse: LoginResponse, currentUser?: CurrentUserResponse): SessionState => ({
 	accessToken: authResponse.token,
 	user: {
@@ -23,6 +33,7 @@ export const buildSessionFromAuth = (authResponse: LoginResponse, currentUser?: 
 		email: currentUser?.email ?? '',
 		name: currentUser?.userName ?? authResponse.username,
 		roles: currentUser?.roles ?? authResponse.roles,
+		profileImageUrl: currentUser?.profileImageUrl,
 	},
 })
 

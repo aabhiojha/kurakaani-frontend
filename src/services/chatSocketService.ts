@@ -6,7 +6,11 @@ export type ServerMessage = {
 	id: number
 	senderId: number
 	roomId: number
-	content: string
+	content?: string | null
+	messageType?: 'TEXT' | 'IMAGE' | 'VIDEO'
+	mediaUrl?: string | null
+	mediaContentType?: string | null
+	mediaFileName?: string | null
 	isEdited: boolean
 	isDeleted: boolean
 	createdAt: string

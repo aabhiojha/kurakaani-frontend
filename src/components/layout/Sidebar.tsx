@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { MessageSquare, PanelLeftClose, Plus, Settings, UserCircle, Users } from 'lucide-react'
+import { MessageSquare, PanelLeftClose, Plus, Search, Settings, UserCircle, UserPlus, Users } from 'lucide-react'
 import type { ChatSection } from '../../types/chat'
 
-export type SidebarView = ChatSection | 'profile' | 'settings'
+export type SidebarView = ChatSection | 'people' | 'friend-requests' | 'profile' | 'settings'
 
 type SidebarProps = {
 	activeView: SidebarView
@@ -105,6 +105,28 @@ export function Sidebar({
 					>
 						<MessageSquare size={17} />
 						Direct Messages
+					</button>
+					<button
+						onClick={() => onSectionChange('people')}
+						className={`motion-interactive flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${
+							activeView === 'people'
+								? 'bg-[var(--bg-surface)] font-semibold text-[var(--text-primary)] shadow-sm'
+								: 'font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
+						}`}
+					>
+						<Search size={17} />
+						Find People
+					</button>
+					<button
+						onClick={() => onSectionChange('friend-requests')}
+						className={`motion-interactive flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${
+							activeView === 'friend-requests'
+								? 'bg-[var(--bg-surface)] font-semibold text-[var(--text-primary)] shadow-sm'
+								: 'font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
+						}`}
+					>
+						<UserPlus size={17} />
+						Friend Requests
 					</button>
 					<button
 						onClick={() => onSectionChange('settings')}

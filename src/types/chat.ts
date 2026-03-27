@@ -5,9 +5,14 @@ export type Message = {
 	isSent: boolean
 	senderName: string
 	senderAvatar: string
+	senderProfileImageUrl?: string
+	senderId?: number
 	text: string
 	timestamp: string
-	withImage?: boolean
+	messageType?: 'TEXT' | 'IMAGE' | 'VIDEO'
+	mediaUrl?: string
+	mediaContentType?: string
+	mediaFileName?: string
 }
 
 export type Conversation = {
