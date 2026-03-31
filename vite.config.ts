@@ -13,7 +13,9 @@ export default defineConfig({
     host: true, // allow external access
     port: 5173,
     allowedHosts: [
-      'all'
+      'localhost',
+      '127.0.0.1',
+      'unalimentary-emilie-flamboyantly.ngrok-free.dev'
     ],
     proxy: {
       '/api': {

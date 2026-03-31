@@ -1,5 +1,6 @@
 import { apiFetch } from '../lib/api'
 import type { RoomMemberResponse, RoomMessageResponse, RoomResponse, RoomSummaryResponse } from '../types/api/room'
+import type { FriendUserResponse } from '../types/api/friend'
 
 export type CreateGroupRoomRequest = {
 	name: string
@@ -37,7 +38,7 @@ export type UpdateGroupRoomRequest = {
 
 export const updateGroupRoom = (roomId: number, payload: UpdateGroupRoomRequest) =>
 	apiFetch<RoomResponse>(`/api/rooms/room/${roomId}`, {
-		method: 'POST',
+		method: 'PATCH',
 		body: JSON.stringify(payload),
 	})
 
@@ -45,6 +46,9 @@ export const addUsersToRoom = (roomId: number, userIds: number[]) =>
 	updateGroupRoom(roomId, {
 		userId: userIds,
 	})
+
+export const getAddableFriends = (roomId: number) =>
+	apiFetch<FriendUserResponse[]>(`/api/rooms/room/${roomId}/add/friends`)
 
 export const removeUsersFromRoom = (roomId: number, membersId: number[]) =>
 	apiFetch<void>(`/api/rooms/room/${roomId}/remove`, {

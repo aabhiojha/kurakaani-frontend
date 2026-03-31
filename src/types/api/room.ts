@@ -6,6 +6,8 @@ export type RoomMemberResponse = {
 	roomMemberId: number
 	roomId: number
 	userId: number
+	username: string
+	profileImageUrl: string | null
 	roomRole: string
 	joinedAt: string
 }

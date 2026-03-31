@@ -1,5 +1,5 @@
 import { apiFetch } from '../lib/api'
-import type { FriendshipResponse } from '../types/api/friend'
+import type { FriendUserResponse, FriendshipResponse } from '../types/api/friend'
 
 export const sendFriendRequest = (userId: number) =>
 	apiFetch<void>(`/api/friend/request/${userId}`, {
@@ -25,4 +25,4 @@ export const getIncomingFriendRequests = () => apiFetch<FriendshipResponse[]>('/
 
 export const getSentFriendRequests = () => apiFetch<FriendshipResponse[]>('/api/friend/requests/sent')
 
-export const getFriends = () => apiFetch<FriendshipResponse[]>('/api/friend/friends')
+export const getFriends = () => apiFetch<FriendUserResponse[]>('/api/friend/friends')

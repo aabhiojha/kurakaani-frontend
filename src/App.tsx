@@ -10,14 +10,14 @@ import { SettingsPage } from './components/layout/SettingsPage'
 import { Sidebar } from './components/layout/Sidebar'
 import type { SidebarView } from './components/layout/Sidebar'
 import { buildSessionFromAuth, getCurrentUser, loginWithPassword, logout, registerWithPassword, saveSession, uploadProfileImage } from './services/authService'
-import { ChatSocketService, type ServerMessage } from './services/chatSocketService'
+import { ChatSocketService, type NotificationEvent, type ServerMessage, type TypingEvent } from './services/chatSocketService'
 import { cancelFriendRequest, getFriends, getIncomingFriendRequests, getSentFriendRequests, respondToFriendRequest, sendFriendRequest } from './services/friendService'
 import { addUsersToRoom, createGroupRoom, createOrGetDirectRoom, getRoomMembers, getRoomMessages, getRooms, removeUsersFromRoom, updateGroupRoom, upgradeRoomToGroup, uploadRoomMedia } from './services/roomService'
 import { GLOBAL_ROOM_ID } from './lib/config'
 import { getSession } from './lib/session'
 import type { Conversation, ChatSection, Message } from './types/chat'
 import type { CurrentUserResponse, SessionState } from './types/api/session'
-import type { FriendshipResponse } from './types/api/friend'
+import type { FriendUserResponse, FriendshipResponse } from './types/api/friend'
 import type { RoomMemberResponse, RoomMessageResponse, RoomSummaryResponse } from './types/api/room'
 
 const isChatSection = (view: SidebarView): view is ChatSection => view === 'direct' || view === 'groups'
@@ -258,16 +258,21 @@ function App() {
 	const [currentUserProfile, setCurrentUserProfile] = useState<CurrentUserResponse | undefined>(undefined)
 	const [incomingFriendRequests, setIncomingFriendRequests] = useState<FriendshipResponse[]>([])
 	const [sentFriendRequests, setSentFriendRequests] = useState<FriendshipResponse[]>([])
-	const [friends, setFriends] = useState<FriendshipResponse[]>([])
+	const [friends, setFriends] = useState<FriendUserResponse[]>([])
 	const [isFriendshipsLoading, setIsFriendshipsLoading] = useState(false)
 	const [friendshipStatus, setFriendshipStatus] = useState<string | null>(null)
 	const [roomMembersByConversation, setRoomMembersByConversation] = useState<Record<number, RoomMemberResponse[]>>({})
 	const [roomMembersStatus, setRoomMembersStatus] = useState<string | null>(null)
 	const [isRoomMembersLoading, setIsRoomMembersLoading] = useState(false)
+	const [typingUsersByConversation, setTypingUsersByConversation] = useState<Record<number, Array<{ userId: number; userName: string }>>>({})
+	const isWebSocketDebugEnabled = import.meta.env.DEV
+		&& (typeof window === 'undefined' || window.localStorage.getItem('kurakaani-ws-debug') !== '0')
 	const chatSocketRef = useRef<ChatSocketService>(new ChatSocketService())
 	const subscribedRoomIdRef = useRef<number | null>(null)
+	const subscribedTypingRoomIdRef = useRef<number | null>(null)
 	const pendingSentMessagesRef = useRef<Map<number, Map<string, number>>>(new Map())
 	const pendingMediaUploadsRef = useRef<Map<number, number>>(new Map())
+	const typingExpiryTimersRef = useRef<Map<string, number>>(new Map())
 	const attemptedGlobalJoinUserIdsRef = useRef<Set<number>>(new Set())
 	const activeSection: ChatSection = isChatSection(activeView) ? activeView : 'direct'
  	const isDarkMode = themeMode === 'system' ? systemPrefersDark : themeMode === 'dark'
@@ -296,6 +301,19 @@ function App() {
 
 	const activeMessages = activeConversation ? (messagesByConversation[activeConversation.id] ?? []) : []
 	const activeRoomMembers = activeConversation ? (roomMembersByConversation[activeConversation.id] ?? []) : []
+	const activeTypingUsers = activeConversation ? (typingUsersByConversation[activeConversation.id] ?? []) : []
+	const activeTypingText = useMemo(() => {
+		if (activeTypingUsers.length === 0) {
+			return null
+		}
+
+		const names = activeTypingUsers.map((item) => item.userName)
+		if (names.length === 1) {
+			return `${names[0]} is typing...`
+		}
+
+		return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} are typing...`
+	}, [activeTypingUsers])
 
 	const handleSectionChange = (section: SidebarView) => {
 		setActiveView(section)
@@ -324,6 +342,72 @@ function App() {
 		if (isMobile) {
 			setMobilePane('detail')
 		}
+	}
+
+	const clearTypingExpiryTimer = (roomId: number, userId: number) => {
+		const timerKey = `${roomId}:${userId}`
+		const timerId = typingExpiryTimersRef.current.get(timerKey)
+		if (typeof timerId === 'number') {
+			window.clearTimeout(timerId)
+			typingExpiryTimersRef.current.delete(timerKey)
+		}
+	}
+
+	const clearTypingStateForRoom = (roomId: number) => {
+		for (const [key, timerId] of typingExpiryTimersRef.current.entries()) {
+			if (key.startsWith(`${roomId}:`)) {
+				window.clearTimeout(timerId)
+				typingExpiryTimersRef.current.delete(key)
+			}
+		}
+
+		setTypingUsersByConversation((previous) => {
+			if (!(roomId in previous)) {
+				return previous
+			}
+
+			const next = { ...previous }
+			delete next[roomId]
+			return next
+		})
+	}
+
+	const resolveTypingUserName = () => currentUserProfile?.userName ?? session?.user.name ?? 'You'
+
+	const handleTypingStart = (conversationId: number) => {
+		if (!session?.accessToken || !session.user.id) {
+			return
+		}
+
+		const userName = resolveTypingUserName()
+
+		chatSocketRef.current.sendTyping(conversationId, {
+			userId: session.user.id,
+			senderId: session.user.id,
+			roomId: conversationId,
+			userName,
+			username: userName,
+			typing: true,
+			isTyping: true,
+		})
+	}
+
+	const handleTypingStop = (conversationId: number) => {
+		if (!session?.accessToken || !session.user.id) {
+			return
+		}
+
+		const userName = resolveTypingUserName()
+
+		chatSocketRef.current.sendTyping(conversationId, {
+			userId: session.user.id,
+			senderId: session.user.id,
+			roomId: conversationId,
+			userName,
+			username: userName,
+			typing: false,
+			isTyping: false,
+		})
 	}
 
 	const createGroupConversation = (roomId: number, name: string, description: string) => {
@@ -541,6 +625,8 @@ function App() {
 	}, [activeSection, session?.accessToken, session?.user.id])
 
 	const handleSendMessage = (conversationId: number, text: string) => {
+		handleTypingStop(conversationId)
+
 		const normalized = normalizeMessageContent(text)
 		if (normalized) {
 			const pendingByRoom = pendingSentMessagesRef.current.get(conversationId) ?? new Map<string, number>()
@@ -867,6 +953,15 @@ function App() {
 		attemptedGlobalJoinUserIdsRef.current.add(userId)
 
 		try {
+			const rooms = await getRooms()
+			if (rooms.some((room) => room.id === GLOBAL_ROOM_ID)) {
+				return false
+			}
+		} catch {
+			// Fall back to add attempt when room list cannot be resolved.
+		}
+
+		try {
 			await addUsersToRoom(GLOBAL_ROOM_ID, [userId])
 			return true
 		} catch {
@@ -942,6 +1037,12 @@ function App() {
 		logout()
 		chatSocketRef.current.disconnect()
 		subscribedRoomIdRef.current = null
+		subscribedTypingRoomIdRef.current = null
+		typingExpiryTimersRef.current.forEach((timerId) => {
+			window.clearTimeout(timerId)
+		})
+		typingExpiryTimersRef.current.clear()
+		setTypingUsersByConversation({})
 		pendingMediaUploadsRef.current.clear()
 		attemptedGlobalJoinUserIdsRef.current.clear()
 		setIsSocketConnected(false)
@@ -1020,6 +1121,96 @@ function App() {
 	}, [session?.accessToken])
 
 	useEffect(() => {
+		if (!session?.accessToken || !isSocketConnected) {
+			if (isWebSocketDebugEnabled) {
+				console.debug('[ChatSocket][Notifications] skipping subscribe', {
+					hasAccessToken: Boolean(session?.accessToken),
+					isSocketConnected,
+				})
+			}
+			chatSocketRef.current.unsubscribeNotifications()
+			return
+		}
+
+		const upsertFriendship = (items: FriendshipResponse[], payload: FriendshipResponse) => {
+			const existingIndex = items.findIndex((item) => item.id === payload.id)
+			if (existingIndex >= 0) {
+				const next = [...items]
+				next[existingIndex] = payload
+				return next
+			}
+
+			return [payload, ...items]
+		}
+
+		const removeByParticipants = (items: FriendshipResponse[], payload: FriendshipResponse) =>
+			items.filter((item) => {
+				const sameId = item.id === payload.id
+				const sameParticipants = item.requesterId === payload.requesterId && item.recipientId === payload.recipientId
+				return !sameId && !sameParticipants
+			})
+
+		const handleNotification = (event: NotificationEvent) => {
+			if (isWebSocketDebugEnabled) {
+				console.debug('[ChatSocket][Notifications] received event', event)
+			}
+
+			const payload = event.payload
+			if (!payload) {
+				return
+			}
+
+			switch (event.type) {
+				case 'FRIEND_REQUEST_RECEIVED': {
+					setIncomingFriendRequests((previous) => upsertFriendship(previous, payload))
+					setFriendshipStatus(`New friend request from user ${payload.requesterId}.`)
+					break
+				}
+				case 'FRIEND_REQUEST_ACCEPTED': {
+					setIncomingFriendRequests((previous) => removeByParticipants(previous, payload))
+					setSentFriendRequests((previous) => removeByParticipants(previous, payload))
+					setFriends((previous) => upsertFriendship(previous, { ...payload, status: 'ACCEPTED' }))
+					const acceptedByUserId = payload.recipientId === session.user.id ? payload.requesterId : payload.recipientId
+					setFriendshipStatus(`Friend request accepted by user ${acceptedByUserId}.`)
+					break
+				}
+				case 'FRIEND_REQUEST_REJECTED': {
+					setIncomingFriendRequests((previous) => removeByParticipants(previous, payload))
+					setSentFriendRequests((previous) => removeByParticipants(previous, payload))
+					setFriendshipStatus('A friend request was rejected.')
+					break
+				}
+				case 'FRIEND_REMOVED': {
+					setFriends((previous) => removeByParticipants(previous, payload))
+					setFriendshipStatus('A friend removed you.')
+					break
+				}
+				default:
+					break
+			}
+		}
+
+		try {
+			if (isWebSocketDebugEnabled) {
+				console.debug('[ChatSocket][Notifications] subscribing to /user/queue/notifications')
+			}
+			chatSocketRef.current.subscribeToNotifications(handleNotification)
+		} catch {
+			if (isWebSocketDebugEnabled) {
+				console.debug('[ChatSocket][Notifications] subscribe failed, waiting for reconnect')
+			}
+			// Wait for next reconnect cycle.
+		}
+
+		return () => {
+			if (isWebSocketDebugEnabled) {
+				console.debug('[ChatSocket][Notifications] unsubscribing from /user/queue/notifications')
+			}
+			chatSocketRef.current.unsubscribeNotifications()
+		}
+	}, [isSocketConnected, isWebSocketDebugEnabled, session?.accessToken, session?.user.id])
+
+	useEffect(() => {
 		if (!session?.accessToken) {
 			return
 		}
@@ -1038,9 +1229,19 @@ function App() {
 		}, [activeConversation?.id, session?.accessToken])
 
 	useEffect(() => {
+		chatSocketRef.current.setDebug(isWebSocketDebugEnabled)
+	}, [isWebSocketDebugEnabled])
+
+	useEffect(() => {
 		if (!session?.accessToken) {
 			chatSocketRef.current.disconnect()
 			subscribedRoomIdRef.current = null
+			subscribedTypingRoomIdRef.current = null
+			typingExpiryTimersRef.current.forEach((timerId) => {
+				window.clearTimeout(timerId)
+			})
+			typingExpiryTimersRef.current.clear()
+			setTypingUsersByConversation({})
 			pendingMediaUploadsRef.current.clear()
 			setIsSocketConnected(false)
 			return
@@ -1061,6 +1262,12 @@ function App() {
 		return () => {
 			chatSocketRef.current.disconnect()
 			subscribedRoomIdRef.current = null
+			subscribedTypingRoomIdRef.current = null
+			typingExpiryTimersRef.current.forEach((timerId) => {
+				window.clearTimeout(timerId)
+			})
+			typingExpiryTimersRef.current.clear()
+			setTypingUsersByConversation({})
 			setIsSocketConnected(false)
 		}
 	}, [session?.accessToken])
@@ -1070,7 +1277,15 @@ function App() {
 			const previousRoomId = subscribedRoomIdRef.current
 			if (previousRoomId !== null) {
 				chatSocketRef.current.unsubscribe(previousRoomId)
+				clearTypingStateForRoom(previousRoomId)
 				subscribedRoomIdRef.current = null
+			}
+
+			const previousTypingRoomId = subscribedTypingRoomIdRef.current
+			if (previousTypingRoomId !== null) {
+				chatSocketRef.current.unsubscribeTyping(previousTypingRoomId)
+				clearTypingStateForRoom(previousTypingRoomId)
+				subscribedTypingRoomIdRef.current = null
 			}
 			return
 		}
@@ -1163,9 +1378,130 @@ function App() {
 		const previousRoomId = subscribedRoomIdRef.current
 		if (previousRoomId !== null && previousRoomId !== roomId) {
 			chatSocketRef.current.unsubscribe(previousRoomId)
+			clearTypingStateForRoom(previousRoomId)
+		}
+
+		const handleTypingEvent = (event: TypingEvent) => {
+			const senderId = event.userId ?? event.senderId
+			if (typeof senderId !== 'number' || senderId <= 0) {
+				return
+			}
+
+			if (senderId === session.user.id) {
+				return
+			}
+
+			const resolvedTypingUserName = (event.userName ?? event.username ?? '').trim()
+			const typingUserName = resolvedTypingUserName.length > 0
+				? resolvedTypingUserName
+				: getKnownSenderName(messagesByConversation[roomId] ?? [], senderId)
+			const isTyping = event.typing ?? event.isTyping ?? false
+
+			if (isTyping) {
+				clearTypingExpiryTimer(roomId, senderId)
+				setTypingUsersByConversation((previous) => {
+					const currentTypingUsers = previous[roomId] ?? []
+					const existingIndex = currentTypingUsers.findIndex((item) => item.userId === senderId)
+
+					if (existingIndex >= 0) {
+						const existing = currentTypingUsers[existingIndex]
+						if (existing.userName === typingUserName) {
+							return previous
+						}
+
+						const nextTypingUsers = [...currentTypingUsers]
+						nextTypingUsers[existingIndex] = { userId: senderId, userName: typingUserName }
+						return { ...previous, [roomId]: nextTypingUsers }
+					}
+
+					return {
+						...previous,
+						[roomId]: [...currentTypingUsers, { userId: senderId, userName: typingUserName }],
+					}
+				})
+
+				const timerId = window.setTimeout(() => {
+					typingExpiryTimersRef.current.delete(`${roomId}:${senderId}`)
+					setTypingUsersByConversation((previous) => {
+						const currentTypingUsers = previous[roomId] ?? []
+						const nextTypingUsers = currentTypingUsers.filter((item) => item.userId !== senderId)
+
+						if (nextTypingUsers.length === currentTypingUsers.length) {
+							return previous
+						}
+
+						if (nextTypingUsers.length === 0) {
+							const next = { ...previous }
+							delete next[roomId]
+							return next
+						}
+
+						return {
+							...previous,
+							[roomId]: nextTypingUsers,
+						}
+					})
+				}, 3000)
+
+				typingExpiryTimersRef.current.set(`${roomId}:${senderId}`, timerId)
+				return
+			}
+
+			clearTypingExpiryTimer(roomId, senderId)
+			setTypingUsersByConversation((previous) => {
+				const currentTypingUsers = previous[roomId] ?? []
+				const nextTypingUsers = currentTypingUsers.filter((item) => item.userId !== senderId)
+
+				if (nextTypingUsers.length === currentTypingUsers.length) {
+					return previous
+				}
+
+				if (nextTypingUsers.length === 0) {
+					const next = { ...previous }
+					delete next[roomId]
+					return next
+				}
+
+				return {
+					...previous,
+					[roomId]: nextTypingUsers,
+				}
+			})
+		}
+
+		const previousTypingRoomId = subscribedTypingRoomIdRef.current
+		if (previousTypingRoomId !== null && previousTypingRoomId !== roomId) {
+			chatSocketRef.current.unsubscribeTyping(previousTypingRoomId)
+			clearTypingStateForRoom(previousTypingRoomId)
 		}
 
 		if (previousRoomId === roomId) {
+			if (previousTypingRoomId === roomId) {
+				return
+			}
+
+			let isDisposed = false
+			const waitForTypingConnection = window.setInterval(() => {
+				if (isDisposed || !chatSocketRef.current.isConnected()) {
+					return
+				}
+
+				try {
+					chatSocketRef.current.subscribeToTyping(roomId, handleTypingEvent)
+					subscribedTypingRoomIdRef.current = roomId
+					window.clearInterval(waitForTypingConnection)
+				} catch {
+					// Wait until client is fully connected.
+				}
+			}, 200)
+
+			return () => {
+				isDisposed = true
+				window.clearInterval(waitForTypingConnection)
+			}
+		}
+
+		if (previousTypingRoomId === roomId) {
 			return
 		}
 
@@ -1177,7 +1513,9 @@ function App() {
 
 			try {
 				chatSocketRef.current.subscribe(roomId, appendIncomingMessage)
+				chatSocketRef.current.subscribeToTyping(roomId, handleTypingEvent)
 				subscribedRoomIdRef.current = roomId
+				subscribedTypingRoomIdRef.current = roomId
 				setBackendStatus(`Live chat connected to room ${roomId}.`)
 				window.clearInterval(waitForConnection)
 			} catch {
@@ -1327,11 +1665,14 @@ function App() {
 				<ChatView
 					conversation={activeConversation}
 					messages={activeMessages}
+					typingIndicatorText={activeTypingText}
 					currentUserId={currentUserProfile?.id ?? session?.user.id}
 					roomMembers={activeRoomMembers}
 					isRoomMembersLoading={isRoomMembersLoading}
 					roomMembersStatus={roomMembersStatus}
 					onSendMessage={handleSendMessage}
+					onTypingStart={handleTypingStart}
+					onTypingStop={handleTypingStop}
 					onUploadMedia={handleUploadMedia}
 					onAddUsersToRoom={handleAddUsersToRoom}
 					onUpdateRoomDetails={handleUpdateRoomDetails}
@@ -1357,11 +1698,14 @@ function App() {
 					<ChatView
 						conversation={activeConversation}
 						messages={activeMessages}
+						typingIndicatorText={activeTypingText}
 						currentUserId={currentUserProfile?.id ?? session?.user.id}
 						roomMembers={activeRoomMembers}
 						isRoomMembersLoading={isRoomMembersLoading}
 						roomMembersStatus={roomMembersStatus}
 						onSendMessage={handleSendMessage}
+						onTypingStart={handleTypingStart}
+						onTypingStop={handleTypingStop}
 						onUploadMedia={handleUploadMedia}
 						onAddUsersToRoom={handleAddUsersToRoom}
 						onUpdateRoomDetails={handleUpdateRoomDetails}
@@ -1387,11 +1731,14 @@ function App() {
 				<ChatView
 					conversation={activeConversation}
 					messages={activeMessages}
+					typingIndicatorText={activeTypingText}
 					currentUserId={currentUserProfile?.id ?? session?.user.id}
 					roomMembers={activeRoomMembers}
 					isRoomMembersLoading={isRoomMembersLoading}
 					roomMembersStatus={roomMembersStatus}
 					onSendMessage={handleSendMessage}
+					onTypingStart={handleTypingStart}
+					onTypingStop={handleTypingStop}
 					onUploadMedia={handleUploadMedia}
 					onAddUsersToRoom={handleAddUsersToRoom}
 					onUpdateRoomDetails={handleUpdateRoomDetails}

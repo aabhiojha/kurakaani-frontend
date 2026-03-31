@@ -237,48 +237,7 @@ function sendTextMessage(client, roomId, content, currentUserId, currentUserName
 
 ---
 
-## 6. Room Members
-
-Fetched via REST, not WebSocket. Use this when opening a room to display the member list.
-
-```javascript
-async function getRoomMembers(roomId, jwtToken) {
-    const res = await fetch(`${BASE_URL}/api/rooms/room/${roomId}`, {
-        headers: { Authorization: `Bearer ${jwtToken}` },
-    });
-    if (!res.ok) throw new Error('Failed to fetch members');
-    return res.json();
-}
-
-// Example response:
-// [
-//   {
-//     roomMemberId: 1,
-//     roomId: 1,
-//     userId: 1,
-//     username: 'abhishek',
-//     profileImageUrl: 'profile/0dfe2ddf-6a94-4473-b27e-8318dec1e952_img_20260317_074328329-1-1.jpg',
-//     roomRole: 'ADMIN',
-//     joinedAt: '2026-03-25T16:11:09.210345'
-//   }
-// ]
-
-// RoomMemberDto shape:
-// {
-//   roomMemberId: number,
-//   roomId: number,
-//   userId: number,
-//   username: string,
-//   profileImageUrl: string | null,  // can be null when no profile image
-//   roomRole: 'ADMIN' | 'MEMBER',
-//   joinedAt: string                 // ISO LocalDateTime: "2026-03-31T10:00:00"
-// }
-```
-
----
-
-## 7. Friend Request Notifications
-
+## 6. Friend Request Notifications
 
 These are user-specific — the server routes them using STOMP's user destination feature. The actual subscription path the client uses is `/user/queue/notifications`; the `/user/` prefix is resolved by the server to the current connected user.
 
@@ -300,11 +259,10 @@ function handleNotification(notification) {
 
     switch (notification.type) {
         case 'FRIEND_REQUEST_RECEIVED':
-            showToast(`${notification.payload.requesterName} sent you a friend request`);
+            showToast(`${notification.payload.requesterUsername} sent you a friend request`);
             break;
         case 'FRIEND_REQUEST_ACCEPTED':
-            // payload has no recipientName, only recipientId
-            showToast('Your friend request was accepted');
+            showToast(`${notification.payload.recipientUsername} accepted your request`);
             break;
         case 'FRIEND_REQUEST_REJECTED':
             showToast('Your friend request was declined');
@@ -318,7 +276,7 @@ function handleNotification(notification) {
 
 ---
 
-## 8. Full Setup Example
+## 7. Full Setup Example
 
 ```javascript
 let stompClient = null;

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Search, UserPlus, Users } from 'lucide-react'
 import { resolveAssetUrl } from '../../lib/config'
 import { getUsers } from '../../services/userService'
-import type { FriendshipResponse } from '../../types/api/friend'
+import type { FriendUserResponse, FriendshipResponse } from '../../types/api/friend'
 import type { UserSummaryResponse } from '../../types/api/user'
 
 type FindPeoplePageProps = {
@@ -10,7 +10,7 @@ type FindPeoplePageProps = {
 	friendships: {
 		incoming: FriendshipResponse[]
 		sent: FriendshipResponse[]
-		friends: FriendshipResponse[]
+		friends: FriendUserResponse[]
 	}
 	onSendFriendRequest: (userId: number) => Promise<void>
 }
@@ -83,18 +83,8 @@ export function FindPeoplePage({ currentUserId, friendships, onSendFriendRequest
 	)
 
 	const friendUserIds = useMemo(
-		() => {
-			const ids = new Set<number>()
-			for (const friendship of friendships.friends) {
-				ids.add(friendship.requesterId)
-				ids.add(friendship.recipientId)
-			}
-			if (typeof currentUserId === 'number' && currentUserId > 0) {
-				ids.delete(currentUserId)
-			}
-			return ids
-		},
-		[currentUserId, friendships.friends],
+		() => new Set(friendships.friends.map((f) => f.userId)),
+		[friendships.friends],
 	)
 
 	const filteredUsers = useMemo(() => {

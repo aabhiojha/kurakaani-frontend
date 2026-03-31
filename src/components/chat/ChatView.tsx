@@ -2,8 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react'
 import { CircleEllipsis, Image as ImageIcon, Plus, Search, SendHorizontal, Smile, UserPlus, Users } from 'lucide-react'
 import { ChatMessage } from './ChatMessage'
+import { resolveAssetUrl } from '../../lib/config'
+import { getAddableFriends, addUsersToRoom } from '../../services/roomService'
 import type { Conversation, Message } from '../../types/chat'
 import type { RoomMemberResponse } from '../../types/api/room'
+import type { FriendUserResponse } from '../../types/api/friend'
 
 const RIGHT_PANEL_MODE_STORAGE_KEY = 'kurakaani-chat-right-panel-mode'
 const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'kurakaani-chat-right-panel-width'
@@ -11,11 +14,14 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'kurakaani-chat-right-panel-width'
 type ChatViewProps = {
 	conversation?: Conversation
 	messages: Message[]
+	typingIndicatorText?: string | null
 	currentUserId?: number
 	roomMembers?: RoomMemberResponse[]
 	isRoomMembersLoading?: boolean
 	roomMembersStatus?: string | null
 	onSendMessage: (conversationId: number, text: string) => void
+	onTypingStart?: (conversationId: number) => void
+	onTypingStop?: (conversationId: number) => void
 	onUploadMedia?: (conversationId: number, file: File, caption?: string) => void | Promise<void>
 	onAddUsersToRoom?: (conversationId: number, userIds: number[]) => Promise<void>
 	onUpdateRoomDetails?: (conversationId: number, updates: { name?: string; description?: string }) => Promise<void>
@@ -26,11 +32,14 @@ type ChatViewProps = {
 export function ChatView({
 	conversation,
 	messages,
+	typingIndicatorText = null,
 	currentUserId,
 	roomMembers = [],
 	isRoomMembersLoading = false,
 	roomMembersStatus = null,
 	onSendMessage,
+	onTypingStart,
+	onTypingStop,
 	onUploadMedia,
 	onAddUsersToRoom,
 	onUpdateRoomDetails,
@@ -71,19 +80,20 @@ export function ChatView({
 		return Math.max(320, Math.min(560, saved))
 	})
 	const [isResizingRightPanel, setIsResizingRightPanel] = useState(false)
-	const [inviteValue, setInviteValue] = useState('')
-	const [inviteError, setInviteError] = useState<string | null>(null)
-	const [isInviting, setIsInviting] = useState(false)
 	const [roomNameInput, setRoomNameInput] = useState(conversation.name)
 	const [roomDescriptionInput, setRoomDescriptionInput] = useState(conversation.description ?? '')
 	const [roomSettingsError, setRoomSettingsError] = useState<string | null>(null)
 	const [isUpdatingRoom, setIsUpdatingRoom] = useState(false)
 	const [removingMemberId, setRemovingMemberId] = useState<number | null>(null)
+	const [addableFriends, setAddableFriends] = useState<FriendUserResponse[]>([])
+	const [isLoadingAddable, setIsLoadingAddable] = useState(false)
 	const layoutRef = useRef<HTMLElement | null>(null)
 	const messagesContainerRef = useRef<HTMLDivElement | null>(null)
 	const messagesContentRef = useRef<HTMLDivElement | null>(null)
 	const emojiPickerRef = useRef<HTMLDivElement | null>(null)
 	const fileInputRef = useRef<HTMLInputElement | null>(null)
+	const typingStopTimeoutRef = useRef<number | null>(null)
+	const isTypingBurstActiveRef = useRef(false)
 	const shouldStickToBottomRef = useRef(true)
 	const emojiOptions = ['😀', '😂', '😍', '👍', '🔥', '🎉', '🙏', '💬']
 	const isCurrentUserAdmin = conversation.isGroup && typeof currentUserId === 'number'
@@ -114,6 +124,44 @@ export function ChatView({
 		}
 
 		container.scrollTop = container.scrollHeight
+	}
+
+	const clearTypingStopTimeout = () => {
+		if (typingStopTimeoutRef.current === null) {
+			return
+		}
+
+		window.clearTimeout(typingStopTimeoutRef.current)
+		typingStopTimeoutRef.current = null
+	}
+
+	const stopTyping = () => {
+		clearTypingStopTimeout()
+
+		if (!isTypingBurstActiveRef.current) {
+			return
+		}
+
+		isTypingBurstActiveRef.current = false
+		onTypingStop?.(conversation.id)
+	}
+
+	const startTyping = () => {
+		if (isSendDisabled || !onTypingStart || !onTypingStop) {
+			return
+		}
+
+		if (!isTypingBurstActiveRef.current) {
+			onTypingStart(conversation.id)
+			isTypingBurstActiveRef.current = true
+		}
+
+		clearTypingStopTimeout()
+		typingStopTimeoutRef.current = window.setTimeout(() => {
+			isTypingBurstActiveRef.current = false
+			onTypingStop(conversation.id)
+			typingStopTimeoutRef.current = null
+		}, 2000)
 	}
 
 	useEffect(() => {
@@ -197,18 +245,36 @@ export function ChatView({
 	}, [])
 
 	useEffect(() => {
-		setInviteValue('')
-		setInviteError(null)
 		setRoomNameInput(conversation.name)
 		setRoomDescriptionInput(conversation.description ?? '')
 		setRoomSettingsError(null)
+		setAddableFriends([])
 	}, [conversation.id])
+
+	useEffect(() => {
+		if (rightPanelMode !== 'settings' || !conversation.id) return
+		let disposed = false
+
+		setIsLoadingAddable(true)
+		getAddableFriends(conversation.id)
+			.then((data) => { if (!disposed) setAddableFriends(data) })
+			.catch(() => { if (!disposed) setAddableFriends([]) })
+			.finally(() => { if (!disposed) setIsLoadingAddable(false) })
+
+		return () => { disposed = true }
+	}, [rightPanelMode, conversation.id])
 
 	useEffect(() => {
 		if (!isCurrentUserAdmin) {
 			setRightPanelMode((previous) => (previous === 'settings' ? null : previous))
 		}
 	}, [isCurrentUserAdmin])
+
+	useEffect(() => {
+		return () => {
+			stopTyping()
+		}
+	}, [conversation.id])
 
 	useEffect(() => {
 		if (typeof window === 'undefined') {
@@ -273,6 +339,7 @@ export function ChatView({
 			return
 		}
 
+		stopTyping()
 		onSendMessage(conversation.id, cleaned)
 		setDraft('')
 	}
@@ -292,6 +359,7 @@ export function ChatView({
 	const onSelectEmoji = (emoji: string) => {
 		setDraft((prev) => `${prev}${emoji}`)
 		setIsEmojiOpen(false)
+		startTyping()
 	}
 
 	const onSelectMedia = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -301,38 +369,9 @@ export function ChatView({
 		}
 
 		await onUploadMedia(conversation.id, file, draft)
+		stopTyping()
 		setDraft('')
 		event.target.value = ''
-	}
-
-	const handleInviteSubmit = async (event: FormEvent<HTMLFormElement>) => {
-		event.preventDefault()
-
-		if (!onAddUsersToRoom) {
-			return
-		}
-
-		const parsedIds = inviteValue
-			.split(',')
-			.map((value) => Number(value.trim()))
-			.filter((value) => Number.isInteger(value) && value > 0)
-
-		if (parsedIds.length === 0) {
-			setInviteError('Enter one or more numeric user IDs separated by commas.')
-			return
-		}
-
-		setInviteError(null)
-		setIsInviting(true)
-
-		try {
-			await onAddUsersToRoom(conversation.id, Array.from(new Set(parsedIds)))
-			setInviteValue('')
-		} catch (error) {
-			setInviteError(error instanceof Error ? error.message : 'Failed to add users to the room.')
-		} finally {
-			setIsInviting(false)
-		}
 	}
 
 	const handleUpdateRoomSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -380,6 +419,18 @@ export function ChatView({
 		} finally {
 			setRemovingMemberId(null)
 		}
+	}
+
+	const handleAddFriend = async (userId: number) => {
+		// Let parent handle the room members refresh (it owns roomMembers prop)
+		if (onAddUsersToRoom) {
+			await onAddUsersToRoom(conversation.id, [userId])
+		} else {
+			await addUsersToRoom(conversation.id, [userId])
+		}
+		// Refresh our local addable list so the added friend disappears from it
+		const updatedAddable = await getAddableFriends(conversation.id)
+		setAddableFriends(updatedAddable)
 	}
 
 	return (
@@ -448,6 +499,10 @@ export function ChatView({
 				</div>
 				</div>
 
+				<div className="min-h-7 border-t border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1.5 sm:px-5 lg:px-6">
+					<p className="text-xs text-[var(--text-secondary)]">{typingIndicatorText ?? '\u00A0'}</p>
+				</div>
+
 				<form onSubmit={onSubmit} className="border-t border-[var(--border)] bg-[var(--bg-surface)] px-3 py-3 sm:px-5 sm:py-4 lg:px-6">
 					<div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-soft)] p-2 shadow-sm">
 						<div className="flex items-center gap-1">
@@ -473,7 +528,15 @@ export function ChatView({
 
 							<textarea
 								value={draft}
-								onChange={(event) => setDraft(event.target.value)}
+								onChange={(event) => {
+									setDraft(event.target.value)
+									if (event.target.value.trim().length === 0) {
+										stopTyping()
+										return
+									}
+
+									startTyping()
+								}}
 								onKeyDown={onKeyDown}
 								disabled={isSendDisabled}
 								rows={1}
@@ -564,23 +627,31 @@ export function ChatView({
 										<p className="text-sm text-[var(--text-secondary)]">Loading room members…</p>
 									) : roomMembers.length > 0 ? (
 										<div className="space-y-2">
-											{roomMembers.map((member) => (
-												<div key={member.roomMemberId} className="rounded-lg border border-[var(--border)] bg-[var(--bg-soft)] px-2.5 py-2">
-													<div className="flex items-center justify-between gap-2">
-														<div className="flex min-w-0 items-center gap-2.5">
-															<div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--avatar-neutral-bg)] text-[10px] font-semibold text-white">
-																U{member.userId}
+											{roomMembers.map((member) => {
+												const avatarUrl = resolveAssetUrl(member.profileImageUrl)
+												const initials = member.username.slice(0, 2).toUpperCase()
+												return (
+													<div key={member.roomMemberId} className="rounded-lg border border-[var(--border)] bg-[var(--bg-soft)] px-2.5 py-2">
+														<div className="flex items-center justify-between gap-2">
+															<div className="flex min-w-0 items-center gap-2.5">
+																<div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--avatar-neutral-bg)] text-[10px] font-semibold text-white">
+																	{avatarUrl ? (
+																		<img src={avatarUrl} alt={member.username} className="h-full w-full object-cover" />
+																	) : (
+																		initials
+																	)}
+																</div>
+																<p className="truncate text-sm font-semibold text-[var(--text-primary)]">{member.username}</p>
 															</div>
-															<p className="truncate text-sm font-semibold text-[var(--text-primary)]">User #{member.userId}</p>
+															{member.roomRole.toUpperCase() === 'ADMIN' ? (
+																<span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+																	{member.roomRole}
+																</span>
+															) : null}
 														</div>
-														{member.roomRole.toUpperCase() === 'ADMIN' ? (
-															<span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
-																{member.roomRole}
-															</span>
-														) : null}
 													</div>
-												</div>
-											))}
+												)
+											})}
 										</div>
 									) : (
 										<p className="text-sm text-[var(--text-secondary)]">No members were returned for this room.</p>
@@ -644,75 +715,94 @@ export function ChatView({
 										<p className="text-sm text-[var(--text-secondary)]">Loading room members…</p>
 									) : roomMembers.length > 0 ? (
 										<div className="space-y-2">
-											{roomMembers.map((member) => (
-												<div key={member.roomMemberId} className="rounded-lg border border-[var(--border)] bg-[var(--bg-soft)] px-2.5 py-2">
-													<div className="flex items-center justify-between gap-2">
-														<div className="flex min-w-0 items-center gap-2.5">
-															<div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--avatar-neutral-bg)] text-[10px] font-semibold text-white">
-																U{member.userId}
+											{roomMembers.map((member) => {
+												const avatarUrl = resolveAssetUrl(member.profileImageUrl)
+												const initials = member.username.slice(0, 2).toUpperCase()
+												return (
+													<div key={member.roomMemberId} className="rounded-lg border border-[var(--border)] bg-[var(--bg-soft)] px-2.5 py-2">
+														<div className="flex items-center justify-between gap-2">
+															<div className="flex min-w-0 items-center gap-2.5">
+																<div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--avatar-neutral-bg)] text-[10px] font-semibold text-white">
+																	{avatarUrl ? (
+																		<img src={avatarUrl} alt={member.username} className="h-full w-full object-cover" />
+																	) : (
+																		initials
+																	)}
+																</div>
+																<div className="min-w-0">
+																	<p className="truncate text-sm font-semibold text-[var(--text-primary)]">{member.username}</p>
+																	{member.roomRole.toUpperCase() === 'ADMIN' ? (
+																		<span className="inline-flex rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+																			{member.roomRole}
+																		</span>
+																	) : null}
+																</div>
 															</div>
-															<div className="min-w-0">
-																<p className="truncate text-sm font-semibold text-[var(--text-primary)]">User #{member.userId}</p>
-																{member.roomRole.toUpperCase() === 'ADMIN' ? (
-																	<span className="inline-flex rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
-																		{member.roomRole}
-																	</span>
-																) : null}
-															</div>
+															{member.roomRole.toUpperCase() !== 'ADMIN' && (
+																<button
+																	type="button"
+																	onClick={() => void handleRemoveMember(member.roomMemberId)}
+																	disabled={removingMemberId === member.roomMemberId}
+																	className="motion-interactive rounded-lg border border-[var(--border)] px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-70"
+																>
+																	{removingMemberId === member.roomMemberId ? 'Removing…' : 'Remove'}
+																</button>
+															)}
 														</div>
-														{member.roomRole.toUpperCase() !== 'ADMIN' && (
-															<button
-																type="button"
-																onClick={() => void handleRemoveMember(member.roomMemberId)}
-																disabled={removingMemberId === member.roomMemberId}
-																className="motion-interactive rounded-lg border border-[var(--border)] px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-70"
-															>
-																{removingMemberId === member.roomMemberId ? 'Removing…' : 'Remove'}
-															</button>
-														)}
 													</div>
-												</div>
-											))}
+												)
+											})}
 										</div>
 									) : (
 										<p className="text-sm text-[var(--text-secondary)]">No members were returned for this room.</p>
 									)}
 								</div>
 
-								<form onSubmit={handleInviteSubmit} className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+								<div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] p-4">
 									<div className="mb-3 flex items-center gap-2">
 										<div className="rounded-xl bg-[var(--accent-soft)] p-2 text-[var(--accent)]">
 											<UserPlus size={16} />
 										</div>
 										<div>
-											<h4 className="text-sm font-semibold text-[var(--text-primary)]">Add Users</h4>
-											<p className="text-xs text-[var(--text-muted)]">Add users by backend user ID.</p>
+											<h4 className="text-sm font-semibold text-[var(--text-primary)]">Add from Friends</h4>
+											<p className="text-xs text-[var(--text-muted)]">Friends not yet in this room.</p>
 										</div>
 									</div>
-									<label className="block text-xs font-medium text-[var(--text-secondary)]">
-										User IDs
-										<input
-											type="text"
-											value={inviteValue}
-											onChange={(event) => setInviteValue(event.target.value)}
-											placeholder="Example: 2, 3, 14"
-											className="motion-focus mt-1.5 w-full rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
-										/>
-									</label>
-									<p className="mt-2 text-xs text-[var(--text-muted)]">Add one or more backend user IDs separated by commas.</p>
-									{inviteError && <p className="mt-3 text-sm text-red-500">{inviteError}</p>}
-									{roomSettingsError && <p className="mt-3 text-sm text-red-500">{roomSettingsError}</p>}
-									{roomMembersStatus && <p className="mt-3 text-sm text-[var(--text-secondary)]">{roomMembersStatus}</p>}
-									<div className="mt-4 flex justify-end">
-										<button
-											type="submit"
-											disabled={isInviting}
-											className="motion-interactive rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--bg-page)] shadow-[var(--shadow-accent)] hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-70"
-										>
-											{isInviting ? 'Adding…' : 'Add To Room'}
-										</button>
-									</div>
-								</form>
+									{isLoadingAddable ? (
+										<p className="text-sm text-[var(--text-secondary)]">Loading friends…</p>
+									) : addableFriends.length === 0 ? (
+										<p className="text-sm text-[var(--text-secondary)]">No friends to add.</p>
+									) : (
+										<div className="space-y-2">
+											{addableFriends.map((friend) => {
+												const avatarUrl = resolveAssetUrl(friend.profilePicUrl)
+												const initials = friend.username.slice(0, 2).toUpperCase()
+												return (
+													<div key={friend.userId} className="flex items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2">
+														<div className="flex min-w-0 items-center gap-2.5">
+															<div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--avatar-neutral-bg)] text-[10px] font-semibold text-white">
+																{avatarUrl
+																	? <img src={avatarUrl} alt={friend.username} className="h-full w-full object-cover" />
+																	: initials}
+															</div>
+															<p className="truncate text-sm font-semibold text-[var(--text-primary)]">{friend.username}</p>
+														</div>
+														<button
+															type="button"
+															onClick={() => void handleAddFriend(friend.userId)}
+															className="motion-interactive rounded-lg bg-[var(--accent)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--bg-page)] hover:bg-[var(--accent-strong)]"
+														>
+															Add
+														</button>
+													</div>
+												)
+											})}
+										</div>
+									)}
+								</div>
+
+								{roomSettingsError && <p className="mt-3 text-sm text-red-500">{roomSettingsError}</p>}
+								{roomMembersStatus && <p className="mt-3 text-sm text-[var(--text-secondary)]">{roomMembersStatus}</p>}
 							</div>
 						</>
 					)}

@@ -1,14 +1,14 @@
 import { useRef, useState, type ChangeEvent } from 'react'
 import { Camera, Mail, ShieldCheck, UserCircle, Users } from 'lucide-react'
 import { resolveAssetUrl } from '../../lib/config'
-import type { FriendshipResponse } from '../../types/api/friend'
+import type { FriendUserResponse } from '../../types/api/friend'
 import type { CurrentUserResponse, SessionState } from '../../types/api/session'
 
 type ProfilePageProps = {
 	session: SessionState | null
 	currentUser?: CurrentUserResponse
 	friendships: {
-		friends: FriendshipResponse[]
+		friends: FriendUserResponse[]
 	}
 	isFriendshipsLoading: boolean
 	onUploadProfileImage?: (file: File) => Promise<void>
@@ -58,13 +58,9 @@ export function ProfilePage({
 	const avatarLabel = getAvatarLabel(displayName)
 	const profileImageUrl = resolveAssetUrl(currentUser?.profileImageUrl ?? session?.user.profileImageUrl)
 	const enabledLabel = currentUser?.enabled === false ? 'Restricted' : 'Active'
-	const currentUserId = currentUser?.id ?? session?.user.id ?? 0
 	const [uploadError, setUploadError] = useState<string | null>(null)
 	const [isUploading, setIsUploading] = useState(false)
 	const fileInputRef = useRef<HTMLInputElement | null>(null)
-
-	const getOtherUserId = (friendship: FriendshipResponse) =>
-		friendship.requesterId === currentUserId ? friendship.recipientId : friendship.requesterId
 
 	const handleProfileImageSelection = async (event: ChangeEvent<HTMLInputElement>) => {
 		const file = event.target.files?.[0]
@@ -227,12 +223,25 @@ export function ProfilePage({
 								<span className="rounded-full bg-[var(--bg-surface)] px-2 py-1 text-xs text-[var(--text-secondary)]">{friendships.friends.length}</span>
 							</div>
 							<div className="space-y-3">
-								{friendships.friends.map((friendship) => (
-									<div key={friendship.id} className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3">
-										<p className="text-sm font-semibold text-[var(--text-primary)]">User #{getOtherUserId(friendship)}</p>
-										<p className="mt-1 text-xs text-[var(--text-muted)]">Accepted friendship</p>
-									</div>
-								))}
+								{friendships.friends.map((friend) => {
+									const friendAvatarLabel = getAvatarLabel(friend.username)
+									const friendImageUrl = resolveAssetUrl(friend.profilePicUrl)
+									return (
+										<div key={friend.userId} className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3">
+											<div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--avatar-neutral-bg)] text-xs font-semibold text-white">
+												{friendImageUrl ? (
+													<img src={friendImageUrl} alt={friend.username} className="h-full w-full object-cover" />
+												) : (
+													friendAvatarLabel
+												)}
+											</div>
+											<div className="min-w-0">
+												<p className="truncate text-sm font-semibold text-[var(--text-primary)]">{friend.username}</p>
+												<p className="text-xs text-[var(--text-muted)]">@{friend.username}</p>
+											</div>
+										</div>
+									)
+								})}
 								{isFriendshipsLoading && <p className="text-sm text-[var(--text-secondary)]">Loading friends…</p>}
 								{!isFriendshipsLoading && friendships.friends.length === 0 && <p className="text-sm text-[var(--text-secondary)]">No friends yet.</p>}
 							</div>

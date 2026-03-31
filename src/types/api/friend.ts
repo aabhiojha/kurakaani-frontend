@@ -8,3 +8,9 @@ export type FriendshipResponse = {
 	createdAt: string
 	updatedAt: string
 }
+
+export type FriendUserResponse = {
+	userId: number
+	username: string
+	profilePicUrl: string | null
+}
