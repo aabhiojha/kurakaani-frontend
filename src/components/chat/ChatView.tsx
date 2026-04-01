@@ -3,7 +3,8 @@ import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react'
 import { CircleEllipsis, Image as ImageIcon, Plus, Search, SendHorizontal, Smile, UserPlus, Users } from 'lucide-react'
 import { ChatMessage } from './ChatMessage'
 import { resolveAssetUrl } from '../../lib/config'
-import { getAddableFriends, addUsersToRoom } from '../../services/roomService'
+import { getAddableFriends, addUsersToRoom, searchMessagesInRoom } from '../../services/roomService'
+import { mapSearchedMessagesToMessages } from '../../lib/chatUtils'
 import type { Conversation, Message } from '../../types/chat'
 import type { RoomMemberResponse } from '../../types/api/room'
 import type { FriendUserResponse } from '../../types/api/friend'
@@ -87,6 +88,12 @@ export function ChatView({
 	const [removingMemberId, setRemovingMemberId] = useState<number | null>(null)
 	const [addableFriends, setAddableFriends] = useState<FriendUserResponse[]>([])
 	const [isLoadingAddable, setIsLoadingAddable] = useState(false)
+	const [isSearchOpen, setIsSearchOpen] = useState(false)
+	const [searchText, setSearchText] = useState('')
+	const [searchedMessages, setSearchedMessages] = useState<Message[]>([])
+	const [searchStatus, setSearchStatus] = useState<string | null>(null)
+	const [isSearching, setIsSearching] = useState(false)
+	const [hasSearched, setHasSearched] = useState(false)
 	const layoutRef = useRef<HTMLElement | null>(null)
 	const messagesContainerRef = useRef<HTMLDivElement | null>(null)
 	const messagesContentRef = useRef<HTMLDivElement | null>(null)
@@ -100,6 +107,7 @@ export function ChatView({
 		? roomMembers.some((member) => member.userId === currentUserId && member.roomRole.toUpperCase() === 'ADMIN')
 		: false
 	const isRightPanelOpen = rightPanelMode !== null
+	const displayedMessages = hasSearched ? searchedMessages : messages
 
 	const getSenderKey = (message: Message) => {
 		if (typeof message.senderId === 'number' && message.senderId > 0) {
@@ -249,6 +257,11 @@ export function ChatView({
 		setRoomDescriptionInput(conversation.description ?? '')
 		setRoomSettingsError(null)
 		setAddableFriends([])
+		setIsSearchOpen(false)
+		setSearchText('')
+		setSearchedMessages([])
+		setSearchStatus(null)
+		setHasSearched(false)
 	}, [conversation.id])
 
 	useEffect(() => {
@@ -433,6 +446,46 @@ export function ChatView({
 		setAddableFriends(updatedAddable)
 	}
 
+	const handleSearchSubmit = async (event: FormEvent<HTMLFormElement>) => {
+		event.preventDefault()
+
+		const trimmed = searchText.trim()
+		if (!trimmed) {
+			setSearchedMessages([])
+			setSearchStatus(null)
+			setHasSearched(false)
+			return
+		}
+
+		setIsSearching(true)
+		setSearchStatus(null)
+
+		try {
+			const results = await searchMessagesInRoom(conversation.id, trimmed)
+			const mapped = mapSearchedMessagesToMessages(results, currentUserId, roomMembers)
+			setSearchedMessages(mapped)
+			setSearchStatus(
+				mapped.length > 0
+					? `${mapped.length} result${mapped.length === 1 ? '' : 's'} found.`
+					: 'No matching messages found.',
+			)
+			setHasSearched(true)
+		} catch (error) {
+			setSearchedMessages([])
+			setHasSearched(false)
+			setSearchStatus(error instanceof Error ? error.message : 'Failed to search messages.')
+		} finally {
+			setIsSearching(false)
+		}
+	}
+
+	const clearSearch = () => {
+		setSearchText('')
+		setSearchedMessages([])
+		setSearchStatus(null)
+		setHasSearched(false)
+	}
+
 	return (
 		<section ref={layoutRef} className="motion-enter motion-stagger-2 flex min-w-0 flex-1 bg-[var(--bg-surface)]">
 			<div className="flex min-w-0 flex-1 flex-col">
@@ -463,7 +516,17 @@ export function ChatView({
 									<Users size={18} />
 								</button>
 							)}
-							<button className="motion-interactive rounded-lg p-2 hover:bg-[var(--bg-soft)] hover:text-[var(--text-primary)]" aria-label="search in conversation">
+							<button
+								type="button"
+								onClick={() => setIsSearchOpen((previous) => {
+									if (previous) {
+										clearSearch()
+									}
+									return !previous
+								})}
+								className={`motion-interactive rounded-lg p-2 hover:bg-[var(--bg-soft)] hover:text-[var(--text-primary)] ${isSearchOpen ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : ''}`}
+								aria-label="search in conversation"
+							>
 								<Search size={18} />
 							</button>
 							<button
@@ -478,24 +541,66 @@ export function ChatView({
 					</div>
 				</header>
 
+				{isSearchOpen && (
+					<form onSubmit={handleSearchSubmit} className="border-b border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 sm:px-5 lg:px-6">
+						<div className="flex items-center gap-2">
+							<input
+								type="text"
+								value={searchText}
+								onChange={(event) => setSearchText(event.target.value)}
+								placeholder="Search messages in this room"
+								className="motion-focus h-10 flex-1 rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
+							/>
+							<button
+								type="submit"
+								disabled={isSearching}
+								className="motion-interactive h-10 rounded-xl bg-[var(--accent)] px-3 text-sm font-semibold text-[var(--bg-page)] disabled:cursor-not-allowed disabled:opacity-70"
+							>
+								{isSearching ? 'Searching…' : 'Search'}
+							</button>
+							<button
+								type="button"
+								onClick={clearSearch}
+								className="motion-interactive h-10 rounded-xl border border-[var(--border)] px-3 text-sm font-medium text-[var(--text-secondary)]"
+							>
+								Clear
+							</button>
+						</div>
+						{searchStatus && <p className="mt-1.5 text-xs text-[var(--text-secondary)]">{searchStatus}</p>}
+					</form>
+				)}
+
 				<div ref={messagesContainerRef} className="flex-1 overflow-y-auto bg-[var(--bg-surface-alt)] px-3 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6">
 				<div ref={messagesContentRef}>
-					<div className="mb-7 flex items-center gap-3">
-						<div className="h-px flex-1 bg-[var(--border)]" />
-						<span className="text-xs font-medium tracking-[0.1em] text-[var(--text-muted)]">OCTOBER 24, 2023</span>
-						<div className="h-px flex-1 bg-[var(--border)]" />
-					</div>
+					{displayedMessages.length > 0 ? (
+						<>
+							<div className="mb-7 flex items-center gap-3">
+								<div className="h-px flex-1 bg-[var(--border)]" />
+								<span className="text-xs font-medium tracking-[0.1em] text-[var(--text-muted)]">OCTOBER 24, 2023</span>
+								<div className="h-px flex-1 bg-[var(--border)]" />
+							</div>
 
-					<div>
-						{messages.map((message, index) => (
-							<ChatMessage
-								key={message.id}
-								message={message}
-								isGroupedWithPrevious={isGroupedWith(messages[index - 1], message)}
-								isGroupedWithNext={isGroupedWith(message, messages[index + 1])}
-							/>
-						))}
-					</div>
+							<div>
+								{displayedMessages.map((message, index) => (
+									<ChatMessage
+										key={message.id}
+										message={message}
+										isGroupedWithPrevious={isGroupedWith(displayedMessages[index - 1], message)}
+										isGroupedWithNext={isGroupedWith(message, displayedMessages[index + 1])}
+									/>
+								))}
+							</div>
+						</>
+					) : (
+						<div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 text-center">
+							<p className="text-sm font-semibold text-[var(--text-primary)]">
+								{hasSearched ? 'No matching messages in this room.' : 'No messages yet.'}
+							</p>
+							<p className="mt-1 text-xs text-[var(--text-secondary)]">
+								{hasSearched ? 'Try a different search phrase.' : 'Start the conversation by sending the first message.'}
+							</p>
+						</div>
+					)}
 				</div>
 				</div>
 
@@ -582,7 +687,7 @@ export function ChatView({
 						</div>
 					</div>
 					<p className="mt-2 text-right text-xs text-[var(--text-muted)]">
-						{isSendDisabled ? 'Disconnected. Reconnecting…' : 'Press Enter to send or attach image/video'}
+						{isSendDisabled ? 'Disconnected. Reconnecting…' : ''}
 					</p>
 				</form>
 			</div>
@@ -758,48 +863,50 @@ export function ChatView({
 									)}
 								</div>
 
-								<div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] p-4">
-									<div className="mb-3 flex items-center gap-2">
-										<div className="rounded-xl bg-[var(--accent-soft)] p-2 text-[var(--accent)]">
-											<UserPlus size={16} />
+								{!conversation.isGroup && (
+									<div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+										<div className="mb-3 flex items-center gap-2">
+											<div className="rounded-xl bg-[var(--accent-soft)] p-2 text-[var(--accent)]">
+												<UserPlus size={16} />
+											</div>
+											<div>
+												<h4 className="text-sm font-semibold text-[var(--text-primary)]">Add from Friends</h4>
+												<p className="text-xs text-[var(--text-muted)]">Friends not yet in this room.</p>
+											</div>
 										</div>
-										<div>
-											<h4 className="text-sm font-semibold text-[var(--text-primary)]">Add from Friends</h4>
-											<p className="text-xs text-[var(--text-muted)]">Friends not yet in this room.</p>
-										</div>
-									</div>
-									{isLoadingAddable ? (
-										<p className="text-sm text-[var(--text-secondary)]">Loading friends…</p>
-									) : addableFriends.length === 0 ? (
-										<p className="text-sm text-[var(--text-secondary)]">No friends to add.</p>
-									) : (
-										<div className="space-y-2">
-											{addableFriends.map((friend) => {
-												const avatarUrl = resolveAssetUrl(friend.profilePicUrl)
-												const initials = friend.username.slice(0, 2).toUpperCase()
-												return (
-													<div key={friend.userId} className="flex items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2">
-														<div className="flex min-w-0 items-center gap-2.5">
-															<div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--avatar-neutral-bg)] text-[10px] font-semibold text-white">
-																{avatarUrl
-																	? <img src={avatarUrl} alt={friend.username} className="h-full w-full object-cover" />
-																	: initials}
+										{isLoadingAddable ? (
+											<p className="text-sm text-[var(--text-secondary)]">Loading friends…</p>
+										) : addableFriends.length === 0 ? (
+											<p className="text-sm text-[var(--text-secondary)]">No friends to add.</p>
+										) : (
+											<div className="space-y-2">
+												{addableFriends.map((friend) => {
+													const avatarUrl = resolveAssetUrl(friend.profilePicUrl)
+													const initials = friend.username.slice(0, 2).toUpperCase()
+													return (
+														<div key={friend.userId} className="flex items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2">
+															<div className="flex min-w-0 items-center gap-2.5">
+																<div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--avatar-neutral-bg)] text-[10px] font-semibold text-white">
+																	{avatarUrl
+																		? <img src={avatarUrl} alt={friend.username} className="h-full w-full object-cover" />
+																		: initials}
+																</div>
+																<p className="truncate text-sm font-semibold text-[var(--text-primary)]">{friend.username}</p>
 															</div>
-															<p className="truncate text-sm font-semibold text-[var(--text-primary)]">{friend.username}</p>
+															<button
+																type="button"
+																onClick={() => void handleAddFriend(friend.userId)}
+																className="motion-interactive rounded-lg bg-[var(--accent)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--bg-page)] hover:bg-[var(--accent-strong)]"
+															>
+																Add
+															</button>
 														</div>
-														<button
-															type="button"
-															onClick={() => void handleAddFriend(friend.userId)}
-															className="motion-interactive rounded-lg bg-[var(--accent)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--bg-page)] hover:bg-[var(--accent-strong)]"
-														>
-															Add
-														</button>
-													</div>
-												)
-											})}
-										</div>
-									)}
-								</div>
+													)
+												})}
+											</div>
+										)}
+									</div>
+								)}
 
 								{roomSettingsError && <p className="mt-3 text-sm text-red-500">{roomSettingsError}</p>}
 								{roomMembersStatus && <p className="mt-3 text-sm text-[var(--text-secondary)]">{roomMembersStatus}</p>}

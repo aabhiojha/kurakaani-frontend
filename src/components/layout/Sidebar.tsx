@@ -93,7 +93,7 @@ export function Sidebar({
 							</button>
 						)}
 					</div>
-					<p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">Private Workspace</p>
+					{/* <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">Private Workspace</p> */}
 				</div>
 
 				<p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.11em] text-[var(--text-muted)]">Navigation</p>
@@ -202,7 +202,7 @@ export function Sidebar({
 							New Chat
 						</button>
 					</div>
-					<button className="motion-interactive text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]">Help</button>
+					{/* <button className="motion-interactive text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"></button> */}
 				</div>
 			</div>
 		</aside>

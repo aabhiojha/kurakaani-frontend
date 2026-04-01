@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Plus, Search, SlidersHorizontal } from 'lucide-react'
 import type { ChatSection, Conversation } from '../../types/chat'
+import type { FriendUserResponse } from '../../types/api/friend'
 
 type RecentMessagesPanelProps = {
 	section: ChatSection
 	conversations: Conversation[]
 	selectedConversationId: number | null
+	friends?: FriendUserResponse[]
 	onSelectConversation: (conversationId: number) => void
 	onCreateDirect: (name: string, description: string) => Promise<{ ok: boolean; error?: string }>
 	onCreateGroup: (name: string, description: string) => Promise<{ ok: boolean; error?: string }>
@@ -18,6 +20,7 @@ export function RecentMessagesPanel({
 	section,
 	conversations,
 	selectedConversationId,
+	friends = [],
 	onSelectConversation,
 	onCreateDirect,
 	onCreateGroup,
@@ -41,17 +44,17 @@ export function RecentMessagesPanel({
 	const handleCreateChat = async (event: FormEvent) => {
 		event.preventDefault()
 		const trimmedName = createName.trim()
-		const trimmedDescription = createDescription.trim()
+		const trimmedDescription = section === 'groups' ? createDescription.trim() : ''
 
 		if (!trimmedName) {
-			setCreateChatStatus(section === 'groups' ? 'Group name is required.' : 'User ID is required.')
+			setCreateChatStatus(section === 'groups' ? 'Group name is required.' : 'Please select a friend.')
 			return
 		}
 
 		setIsCreatingChat(true)
 		const result = section === 'groups'
 			? await onCreateGroup(trimmedName, trimmedDescription)
-			: await onCreateDirect(trimmedName, trimmedDescription)
+			: await onCreateDirect(trimmedName, '')
 		setIsCreatingChat(false)
 
 		if (result.ok) {
@@ -71,7 +74,7 @@ export function RecentMessagesPanel({
 				<div className="mb-4 flex items-center justify-between">
 					<div>
 						<h2 className="text-lg font-semibold tracking-tight text-[var(--text-primary)]">{headerTitle}</h2>
-						<p className="text-xs text-[var(--text-muted)]">{conversations.length} active conversations</p>
+						{/* <p className="text-xs text-[var(--text-muted)]">{conversations.length} active conversations</p> */}
 					</div>
 					<button className="motion-interactive rounded-lg p-2 text-[var(--text-secondary)] hover:bg-[var(--bg-soft)] hover:text-[var(--text-primary)]" aria-label="filter messages">
 						<SlidersHorizontal size={17} />
@@ -91,20 +94,37 @@ export function RecentMessagesPanel({
 							<Plus size={14} />
 							{section === 'groups' ? 'Create Group' : 'Create Direct Chat'}
 						</div>
-						<input
-							type="text"
-							value={createName}
-							onChange={(event) => setCreateName(event.target.value)}
-							placeholder={section === 'groups' ? 'Group name' : 'Target user ID'}
-							className="motion-focus mb-2 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-						/>
-						<input
-							type="text"
-							value={createDescription}
-							onChange={(event) => setCreateDescription(event.target.value)}
-							placeholder={section === 'groups' ? 'Description (optional)' : 'Description (optional)'}
-							className="motion-focus mb-2 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-						/>
+						{section === 'groups' ? (
+							<>
+								<input
+									type="text"
+									value={createName}
+									onChange={(event) => setCreateName(event.target.value)}
+									placeholder="Group name"
+									className="motion-focus mb-2 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+								/>
+								<input
+									type="text"
+									value={createDescription}
+									onChange={(event) => setCreateDescription(event.target.value)}
+									placeholder="Description (optional)"
+									className="motion-focus mb-2 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+								/>
+							</>
+						) : (
+							<select
+								value={createName}
+								onChange={(event) => setCreateName(event.target.value)}
+								className="motion-focus mb-2 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
+							>
+								<option value="">Select a friend...</option>
+								{friends.map((friend) => (
+									<option key={friend.userId} value={String(friend.userId)}>
+										{friend.username}
+									</option>
+								))}
+							</select>
+						)}
 						<div className="flex items-center justify-between">
 							<button
 								type="submit"

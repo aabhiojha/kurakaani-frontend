@@ -31,6 +31,21 @@ export type RoomMessageResponse = {
 	}
 }
 
+export type SearchedMessageResponse = {
+	id: number
+	senderId: number
+	roomId: number
+	content?: string | null
+	messageType: MessageType
+	mediaUrl?: string | null
+	mediaContentType?: string | null
+	mediaFileName?: string | null
+	isEdited: boolean
+	isDeleted: boolean
+	createdAt: string
+	updatedAt: string
+}
+
 export type RecentMessageResponse = {
 	id: number
 	roomId: number

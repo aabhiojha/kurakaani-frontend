@@ -139,7 +139,7 @@ export function ProfilePage({
 						<p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">Account</p>
 						<div className="mb-6 border-b border-[var(--border)] pb-4">
 							<h2 className="mt-1 text-xl font-semibold tracking-tight text-[var(--text-primary)]">Profile Details</h2>
-							<p className="mt-1 text-sm text-[var(--text-secondary)]">Authenticated account data from the backend session.</p>
+							{/* <p className="mt-1 text-sm text-[var(--text-secondary)]">Authenticated account data from the backend session.</p> */}
 						</div>
 
 						<div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-soft)] p-3">

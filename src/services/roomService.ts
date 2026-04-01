@@ -1,5 +1,11 @@
 import { apiFetch } from '../lib/api'
-import type { RoomMemberResponse, RoomMessageResponse, RoomResponse, RoomSummaryResponse } from '../types/api/room'
+import type {
+	RoomMemberResponse,
+	RoomMessageResponse,
+	RoomResponse,
+	RoomSummaryResponse,
+	SearchedMessageResponse,
+} from '../types/api/room'
 import type { FriendUserResponse } from '../types/api/friend'
 
 export type CreateGroupRoomRequest = {
@@ -29,6 +35,12 @@ export const getRooms = () => apiFetch<RoomSummaryResponse[]>('/api/rooms')
 export const getRoomMessages = (roomId: number) => apiFetch<RoomMessageResponse[]>(`/api/rooms/room/${roomId}/message`)
 
 export const getRoomMembers = (roomId: number) => apiFetch<RoomMemberResponse[]>(`/api/rooms/room/${roomId}`)
+
+export const searchMessagesInRoom = (roomId: number, text: string) =>
+	apiFetch<SearchedMessageResponse[]>(`/api/rooms/${roomId}/messages/search?text=${encodeURIComponent(text)}`)
+
+export const searchMessagesAcrossRooms = (text: string) =>
+	apiFetch<SearchedMessageResponse[]>(`/api/rooms/messages/search?text=${encodeURIComponent(text)}`)
 
 export type UpdateGroupRoomRequest = {
 	name?: string
