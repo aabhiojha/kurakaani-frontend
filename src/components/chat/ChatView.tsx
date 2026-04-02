@@ -446,14 +446,19 @@ export function ChatView({
 		setAddableFriends(updatedAddable)
 	}
 
+	const clearSearch = () => {
+		setSearchText('')
+		setSearchedMessages([])
+		setSearchStatus(null)
+		setHasSearched(false)
+	}
+
 	const handleSearchSubmit = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault()
 
 		const trimmed = searchText.trim()
 		if (!trimmed) {
-			setSearchedMessages([])
-			setSearchStatus(null)
-			setHasSearched(false)
+			clearSearch()
 			return
 		}
 
@@ -466,8 +471,8 @@ export function ChatView({
 			setSearchedMessages(mapped)
 			setSearchStatus(
 				mapped.length > 0
-					? `${mapped.length} result${mapped.length === 1 ? '' : 's'} found.`
-					: 'No matching messages found.',
+					? `${mapped.length} result${mapped.length === 1 ? '' : 's'} found in this room.`
+					: 'No matching messages found in this room.',
 			)
 			setHasSearched(true)
 		} catch (error) {
@@ -477,13 +482,6 @@ export function ChatView({
 		} finally {
 			setIsSearching(false)
 		}
-	}
-
-	const clearSearch = () => {
-		setSearchText('')
-		setSearchedMessages([])
-		setSearchStatus(null)
-		setHasSearched(false)
 	}
 
 	return (
@@ -709,7 +707,7 @@ export function ChatView({
 						<>
 							<div className="border-b border-[var(--border)] px-5 py-4">
 								<h3 className="text-sm font-semibold text-[var(--text-primary)]">Conversation Info</h3>
-								<p className="mt-1 text-xs text-[var(--text-muted)]">Visible to everyone in this conversation.</p>
+								{/* <p className="mt-1 text-xs text-[var(--text-muted)]">Visible to everyone in this conversation.</p> */}
 							</div>
 
 							<div className="flex-1 overflow-y-auto p-4">
@@ -811,7 +809,7 @@ export function ChatView({
 									<div className="mb-3 flex items-center justify-between gap-3">
 										<div>
 											<h4 className="text-sm font-semibold text-[var(--text-primary)]">Current Members</h4>
-											<p className="text-xs text-[var(--text-muted)]">Loaded from the backend.</p>
+											{/* <p className="text-xs text-[var(--text-muted)]">Loaded from the backend.</p> */}
 										</div>
 										<span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-1 text-xs font-semibold text-[var(--accent)]">{roomMembers.length}</span>
 									</div>

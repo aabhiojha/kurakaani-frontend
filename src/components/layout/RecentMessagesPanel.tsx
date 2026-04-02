@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Plus, Search, SlidersHorizontal } from 'lucide-react'
 import type { ChatSection, Conversation } from '../../types/chat'
 import type { FriendUserResponse } from '../../types/api/friend'
+import { searchMessagesAcrossRooms } from '../../services/roomService'
 
 type RecentMessagesPanelProps = {
 	section: ChatSection
@@ -32,14 +33,95 @@ export function RecentMessagesPanel({
 	const [isCreatingChat, setIsCreatingChat] = useState(false)
 	const [createChatStatus, setCreateChatStatus] = useState<string | null>(null)
 	const [isComposerOpen, setIsComposerOpen] = useState(false)
+	const [searchQuery, setSearchQuery] = useState('')
+	const [matchedRoomIds, setMatchedRoomIds] = useState<Set<number> | null>(null)
+	const [isSearchingMessages, setIsSearchingMessages] = useState(false)
+	const [searchStatus, setSearchStatus] = useState<string | null>(null)
 	const headerTitle = section === 'groups' ? 'Groups' : 'Recent Messages'
-	const searchPlaceholder = section === 'groups' ? 'Search groups...' : 'Search discussions...'
+	const searchPlaceholder = section === 'groups' ? 'Search messages in groups...' : 'Search discussions...'
 
 	useEffect(() => {
 		if (newChatTrigger > 0) {
 			setIsComposerOpen(true)
 		}
 	}, [newChatTrigger])
+
+	useEffect(() => {
+		if (section !== 'groups') {
+			setMatchedRoomIds(null)
+			setSearchStatus(null)
+			setIsSearchingMessages(false)
+			return
+		}
+
+		const trimmed = searchQuery.trim()
+		if (!trimmed) {
+			setMatchedRoomIds(null)
+			setSearchStatus(null)
+			setIsSearchingMessages(false)
+			return
+		}
+
+		let disposed = false
+		setIsSearchingMessages(true)
+		setSearchStatus(null)
+
+		const timeoutId = window.setTimeout(() => {
+			searchMessagesAcrossRooms(trimmed)
+				.then((results) => {
+					if (disposed) {
+						return
+					}
+					const groupedRoomIds = new Set(conversations.filter((conversation) => conversation.isGroup).map((conversation) => conversation.id))
+					const matched = new Set(
+						results
+							.map((message) => message.roomId)
+							.filter((roomId) => groupedRoomIds.has(roomId)),
+					)
+					setMatchedRoomIds(matched)
+					setSearchStatus(
+						matched.size > 0
+							? `${matched.size} group${matched.size === 1 ? '' : 's'} with matching messages.`
+							: 'No matching messages found in groups.',
+					)
+				})
+				.catch((error: unknown) => {
+					if (disposed) {
+						return
+					}
+					setMatchedRoomIds(new Set())
+					setSearchStatus(error instanceof Error ? error.message : 'Failed to search group messages.')
+				})
+				.finally(() => {
+					if (!disposed) {
+						setIsSearchingMessages(false)
+					}
+				})
+		}, 250)
+
+		return () => {
+			disposed = true
+			window.clearTimeout(timeoutId)
+		}
+	}, [section, searchQuery, conversations])
+
+	const visibleConversations = useMemo(() => {
+		if (section === 'groups' && searchQuery.trim()) {
+			if (matchedRoomIds === null) {
+				return []
+			}
+			return conversations.filter((conversation) => matchedRoomIds.has(conversation.id))
+		}
+
+		const lowered = searchQuery.trim().toLowerCase()
+		if (!lowered) {
+			return conversations
+		}
+
+		return conversations.filter((conversation) =>
+			conversation.name.toLowerCase().includes(lowered) || conversation.preview.toLowerCase().includes(lowered),
+		)
+	}, [conversations, matchedRoomIds, searchQuery, section])
 
 	const handleCreateChat = async (event: FormEvent) => {
 		event.preventDefault()
@@ -84,10 +166,17 @@ export function RecentMessagesPanel({
 					<Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
 					<input
 						type="text"
+						value={searchQuery}
+						onChange={(event) => setSearchQuery(event.target.value)}
 						placeholder={searchPlaceholder}
 						className="motion-focus w-full rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] py-2.5 pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
 					/>
 				</label>
+				{section === 'groups' && searchQuery.trim() && (
+					<p className="mt-2 text-xs text-[var(--text-secondary)]">
+						{isSearchingMessages ? 'Searching messages…' : (searchStatus ?? '\u00A0')}
+					</p>
+				)}
 				{isComposerOpen && (
 					<form onSubmit={handleCreateChat} className="motion-enter-soft mt-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface-alt)] p-3">
 						<div className="mb-2 flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
@@ -140,7 +229,7 @@ export function RecentMessagesPanel({
 			</div>
 
 			<div className="space-y-1 px-2 py-2">
-				{conversations.map((conversation) => (
+				{visibleConversations.map((conversation) => (
 					<article
 						key={conversation.id}
 						onClick={() => onSelectConversation(conversation.id)}
@@ -170,6 +259,13 @@ export function RecentMessagesPanel({
 						</div>
 					</article>
 				))}
+				{visibleConversations.length === 0 && (
+					<div className="px-3 py-8 text-center text-sm text-[var(--text-secondary)]">
+						{section === 'groups' && searchQuery.trim()
+							? 'No groups matched your message search.'
+							: 'No conversations found.'}
+					</div>
+				)}
 			</div>
 		</section>
 	)
