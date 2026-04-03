@@ -258,7 +258,7 @@ export function useRooms(
 		}
 	}
 
-	const handleCreateDirect = async (name: string, description: string) => {
+	const handleCreateDirect = async (name: string, _description?: string) => {
 		if (!session?.accessToken) {
 			const id = Date.now()
 			addLocalConversation(buildConversation(id, name, '', false), `Direct chat with "${name}" created.`)

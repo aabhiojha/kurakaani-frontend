@@ -2,6 +2,7 @@ export type ChatSection = 'direct' | 'groups'
 
 export type Message = {
 	id: number
+	clientId?: string
 	isSent: boolean
 	senderName: string
 	senderAvatar: string
@@ -13,6 +14,8 @@ export type Message = {
 	mediaUrl?: string
 	mediaContentType?: string
 	mediaFileName?: string
+	deliveryState?: 'pending' | 'sent' | 'delivered' | 'read' | 'failed'
+	retryable?: boolean
 }
 
 export type Conversation = {
@@ -24,6 +27,7 @@ export type Conversation = {
 	time: string
 	preview: string
 	avatar: string
+	avatarImageUrl?: string
 	isGroup: boolean
 	online?: boolean
 }

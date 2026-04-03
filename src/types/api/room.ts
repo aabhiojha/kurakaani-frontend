@@ -62,6 +62,7 @@ export type RoomSummaryResponse = {
 	id: number
 	name: string
 	description: string
+	roomImageUrl?: string | null
 	type: RoomType
 	memberCount: number
 	recentMessage: RecentMessageResponse | null
@@ -72,6 +73,7 @@ export type RoomResponse = {
 	id: number
 	name: string
 	description: string
+	roomImageUrl?: string | null
 	members: RoomMemberResponse[]
 	messages: RoomMessageResponse[]
 	type: RoomType

@@ -1,364 +1,733 @@
-# Kurakani WebSocket Client Integration Guide
+# Frontend API Integration Guide
 
-## Dependencies
+This guide reflects the backend currently in this repository.
 
-```bash
-npm install @stomp/stompjs sockjs-client
+What the frontend needs to integrate:
+
+- JWT-based REST auth
+- user profile APIs
+- friend request APIs
+- room and membership APIs
+- STOMP over SockJS for live chat
+- user-targeted websocket notifications
+
+Useful backend references:
+
+- [AuthController.java](/home/abhishek/IdeaProjects/kurakaani/kurakani-monolith/src/main/java/com/abhishekojha/kurakanimonolith/modules/auth/controller/AuthController.java)
+- [UserController.java](/home/abhishek/IdeaProjects/kurakaani/kurakani-monolith/src/main/java/com/abhishekojha/kurakanimonolith/modules/user/controller/UserController.java)
+- [FriendShipController.java](/home/abhishek/IdeaProjects/kurakaani/kurakani-monolith/src/main/java/com/abhishekojha/kurakanimonolith/modules/friendRequest/controller/FriendShipController.java)
+- [RoomController.java](/home/abhishek/IdeaProjects/kurakaani/kurakani-monolith/src/main/java/com/abhishekojha/kurakanimonolith/modules/room/controller/RoomController.java)
+- [MessageController.java](/home/abhishek/IdeaProjects/kurakaani/kurakani-monolith/src/main/java/com/abhishekojha/kurakanimonolith/modules/message/controller/MessageController.java)
+- [WebSocketConfig.java](/home/abhishek/IdeaProjects/kurakaani/kurakani-monolith/src/main/java/com/abhishekojha/kurakanimonolith/common/config/WebSocketConfig.java)
+- [SecurityConfig.java](/home/abhishek/IdeaProjects/kurakaani/kurakani-monolith/src/main/java/com/abhishekojha/kurakanimonolith/common/config/SecurityConfig.java)
+- [application.yaml](/home/abhishek/IdeaProjects/kurakaani/kurakani-monolith/src/main/resources/application.yaml)
+
+## Base URL
+
+Local backend:
+
+```ts
+export const API_BASE_URL = "http://localhost:8080";
 ```
 
----
+Swagger / OpenAPI:
 
-## 1. Connecting
+- `GET /docs`
+- `GET /v3/api-docs`
 
-The server uses STOMP over SockJS at `/ws`. Authentication is via JWT on the CONNECT frame.
+## Cross-Origin and Auth
 
-```javascript
-import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
+Allowed frontend origins:
 
-const BASE_URL = 'http://localhost:8080'; // or https://kurakaani.me
+- `http://localhost:5173`
+- `http://127.0.0.1:5173`
+- `http://192.168.1.19:5173`
+- `https://kurakaani.me`
 
-function createStompClient(jwtToken) {
-    const client = new Client({
-        webSocketFactory: () => new SockJS(`${BASE_URL}/ws`),
+REST requests use JWT bearer auth:
 
-        connectHeaders: {
-            Authorization: `Bearer ${jwtToken}`, // required — server rejects without this
-        },
+```http
+Authorization: Bearer <token>
+```
 
-        onConnect: () => {
-            console.log('Connected');
-            // set up subscriptions here (see below)
-        },
+The login response is:
 
-        onDisconnect: () => {
-            console.log('Disconnected');
-        },
-
-        onStompError: (frame) => {
-            console.error('STOMP error', frame.headers['message']);
-        },
-
-        reconnectDelay: 5000, // auto-reconnect after 5s
-    });
-
-    client.activate();
-    return client;
+```json
+{
+  "token": "<jwt>",
+  "username": "abhishek",
+  "roles": ["ROLE_USER"]
 }
 ```
 
-> **Important:** All subscriptions must be set up inside `onConnect`. If the connection drops and reconnects, `onConnect` fires again — re-subscribe there.
+Recommended session state:
 
----
+```ts
+type Session = {
+  token: string;
+  username: string;
+  roles: string[];
+};
+```
 
-## 2. Subscribing to a Room's Messages
+## Suggested API Wrapper
 
-Subscribe when the user opens a room. Unsubscribe when they leave.
+Use a single wrapper so all protected requests attach the token consistently.
 
-```javascript
-let roomSubscription = null;
+```ts
+const API_BASE_URL = "http://localhost:8080";
 
-function joinRoom(client, roomId) {
-    // unsubscribe from previous room first
-    roomSubscription?.unsubscribe();
+export async function apiFetch<T>(
+  path: string,
+  init: RequestInit = {}
+): Promise<T> {
+  const token = localStorage.getItem("accessToken");
+  const isFormData = init.body instanceof FormData;
 
-    roomSubscription = client.subscribe(
-        `/topic/rooms/${roomId}`,
-        (frame) => {
-            const message = JSON.parse(frame.body);
-            handleIncomingMessage(message);
-        }
-    );
-}
-
-function handleIncomingMessage(message) {
-    // MessageDto shape:
-    // {
-    //   id: number,
-    //   senderId: number,
-    //   roomId: number,
-    //   content: string | null,
-    //   messageType: 'TEXT' | 'IMAGE' | 'VIDEO',
-    //   mediaUrl: string | null,
-    //   mediaContentType: string | null,
-    //   mediaFileName: string | null,
-    //   isEdited: boolean,
-    //   isDeleted: boolean,
-    //   createdAt: string,   // ISO LocalDateTime: "2026-03-30T14:22:00"
-    //   updatedAt: string
-    // }
-
-    if (message.messageType === 'TEXT') {
-        renderTextMessage(message);
-    } else if (message.messageType === 'IMAGE' || message.messageType === 'VIDEO') {
-        renderMediaMessage(message); // use message.mediaUrl directly
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(!isFormData ? { "Content-Type": "application/json" } : {}),
+      ...(init.headers ?? {})
     }
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => null);
+    throw error ?? new Error(`Request failed with ${response.status}`);
+  }
+
+  if (response.status === 204) {
+    return null as T;
+  }
+
+  return response.json() as Promise<T>;
 }
 ```
 
----
+## Authentication
 
-## 3. Sending a Text Message
+### Register
 
-```javascript
-function sendTextMessage(client, roomId, content) {
-    client.publish({
-        destination: `/app/chat.send/${roomId}`,
-        body: JSON.stringify({
-            roomId: roomId,  // MessageRequest fields
-            content: content,
-        }),
-    });
+`POST /api/auth/register`
+
+Request:
+
+```json
+{
+  "username": "abhishek",
+  "password": "secret123",
+  "email": "abhishek@example.com"
 }
 ```
 
-> The server validates room membership. If the user is not a member, the message is silently dropped server-side (no error frame is sent back currently).
+Response:
 
----
+```http
+200 OK
+```
 
-## 4. Sending a Media Message (Image / Video)
+Important:
 
-Media is **not** sent over WebSocket — use a regular REST upload. The server broadcasts the resulting `MessageDto` to the room's WebSocket topic automatically.
+- The controller currently returns no response body.
+- Do not expect a JWT from registration.
+- After registration, call login if you want an authenticated session.
 
-```javascript
-async function sendMediaMessage(roomId, file, caption, jwtToken) {
-    const form = new FormData();
-    form.append('file', file);
-    if (caption) form.append('content', caption);
+### Login
 
-    const res = await fetch(`${BASE_URL}/api/rooms/room/${roomId}/message/media`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${jwtToken}` },
-        body: form,
-    });
+`POST /api/auth/login`
 
-    if (!res.ok) throw new Error('Upload failed');
-    // No need to handle the response — the MessageDto will arrive
-    // on /topic/rooms/{roomId} via WebSocket for all subscribers including sender
+Request:
+
+```json
+{
+  "username": "abhishek",
+  "password": "secret123"
 }
 ```
 
----
+Response:
 
-## 5. Typing Indicators
-
-### Subscribing
-
-```javascript
-let typingSubscription = null;
-const typingUsers = new Map(); // userId -> { userName, timerId }
-
-function subscribeToTyping(client, roomId, currentUserId) {
-    typingSubscription?.unsubscribe();
-
-    typingSubscription = client.subscribe(
-        `/topic/rooms/${roomId}/typing`,
-        (frame) => {
-            const event = JSON.parse(frame.body);
-            // { userId: number, userName: string, typing: boolean }
-
-            if (event.userId === currentUserId) return; // ignore own events
-
-            if (event.typing) {
-                clearTimeout(typingUsers.get(event.userId)?.timerId);
-                // auto-expire in case "typing: false" never arrives (e.g. tab closed)
-                const timerId = setTimeout(() => {
-                    typingUsers.delete(event.userId);
-                    renderTypingIndicator(typingUsers);
-                }, 3000);
-                typingUsers.set(event.userId, { userName: event.userName, timerId });
-            } else {
-                clearTimeout(typingUsers.get(event.userId)?.timerId);
-                typingUsers.delete(event.userId);
-            }
-
-            renderTypingIndicator(typingUsers);
-        }
-    );
+```json
+{
+  "token": "<jwt>",
+  "username": "abhishek",
+  "roles": ["ROLE_USER"]
 }
+```
 
-function renderTypingIndicator(typingUsers) {
-    if (typingUsers.size === 0) {
-        hideTypingBanner();
-        return;
+Frontend flow:
+
+1. Call login.
+2. Store the token.
+3. Attach it to REST requests.
+4. Reuse it in STOMP `CONNECT` headers.
+
+### Password Reset
+
+`POST /api/auth/password-reset`
+
+Request:
+
+```json
+{
+  "email": "abhishek@example.com"
+}
+```
+
+Response:
+
+```http
+200 OK
+```
+
+### Password Reset Confirm
+
+`POST /api/auth/password-reset-confirm`
+
+Request:
+
+```json
+{
+  "token": 123456,
+  "password": "newSecret123"
+}
+```
+
+Response:
+
+```http
+200 OK
+```
+
+## Users
+
+### Get Current User
+
+`GET /api/user/me`
+
+Response shape:
+
+```json
+{
+  "id": 1,
+  "userName": "abhishek",
+  "email": "abhishek@example.com",
+  "profileImageUrl": "https://...",
+  "enabled": true,
+  "roles": ["ROLE_USER"],
+  "createdAt": "2026-03-23T16:00:00",
+  "updatedAt": "2026-03-23T16:00:00"
+}
+```
+
+### Update Current User
+
+`PATCH /api/user/me`
+
+Request:
+
+```json
+{
+  "userName": "abhishek-new",
+  "email": "new@example.com"
+}
+```
+
+### Upload Profile Picture
+
+`POST /api/user/profilePic/upload`
+
+Use `multipart/form-data` with:
+
+- `file`: image file
+
+Response:
+
+```http
+200 OK
+```
+
+Fetch `/api/user/me` after upload if you need the latest `profileImageUrl`.
+
+### Admin / User Directory
+
+`GET /api/user`
+
+`GET /api/user/{userId}`
+
+`DELETE /api/user/{userId}`
+
+Current security config gates `/api/user/**` behind `ROLE_USER`.
+
+## Friend Requests
+
+All friend endpoints are authenticated and use the bearer token.
+
+### Send Request
+
+`POST /api/friend/request/{userId}`
+
+### Respond To Request
+
+`POST /api/friend/respond/{userId}/{response}`
+
+Where `response` is:
+
+- `ACCEPT`
+- `REJECT`
+
+### Cancel Request
+
+`POST /api/friend/{userId}/cancel`
+
+### Unfriend
+
+`POST /api/friend/{userId}/unfriend`
+
+### Sent Requests
+
+`GET /api/friend/requests/sent`
+
+Response item shape:
+
+```json
+{
+  "id": 1,
+  "requesterId": 2,
+  "requesterName": "ram",
+  "recipientId": 4,
+  "recipientName": "sita",
+  "status": "PENDING",
+  "createdAt": "2026-03-23T16:00:00",
+  "updatedAt": "2026-03-23T16:00:00"
+}
+```
+
+### Incoming Requests
+
+`GET /api/friend/requests`
+
+### Friends List
+
+`GET /api/friend/friends`
+
+Response item shape:
+
+```json
+{
+  "userId": 4,
+  "username": "sita",
+  "profilePicUrl": "https://..."
+}
+```
+
+### Friend WebSocket Notifications
+
+The backend sends friend events to:
+
+- `/user/queue/notifications`
+
+Notification payload:
+
+```json
+{
+  "type": "FRIEND_REQUEST_RECEIVED",
+  "payload": { }
+}
+```
+
+The `payload` is typically a `FriendShipDto` instance serialized as JSON.
+
+Event types:
+
+- `FRIEND_REQUEST_RECEIVED`
+- `FRIEND_REQUEST_ACCEPTED`
+- `FRIEND_REQUEST_REJECTED`
+- `FRIEND_REMOVED`
+
+## Rooms
+
+### Get My Rooms
+
+`GET /api/rooms`
+
+Response shape:
+
+```json
+[
+  {
+    "id": 1,
+    "name": "General",
+    "description": "Main room",
+    "roomImageUrl": "https://...",
+    "type": "GROUP",
+    "memberCount": 4,
+    "recentMessage": {
+      "id": 10,
+      "roomId": 1,
+      "content": "hey everyone",
+      "messageType": "TEXT",
+      "sentAt": "2026-03-24T10:30:00",
+      "sender": {
+        "id": 2,
+        "username": "ram"
+      }
+    },
+    "unreadCount": 0
+  }
+]
+```
+
+If the most recent message is media-only, the backend may replace the preview text with:
+
+- `Sent an image`
+- `Sent a video`
+
+### Upload Room Image
+
+`POST /api/rooms/room/{roomId}/image/upload`
+
+Use `multipart/form-data` with:
+
+- `file`: image file
+
+Response:
+
+```http
+200 OK
+```
+
+Fetch `GET /api/rooms` or `GET /api/rooms/room/{roomId}` after upload if you need the latest `roomImageUrl`.
+
+### Get Room Messages
+
+`GET /api/rooms/room/{roomId}/message`
+
+Response shape:
+
+```json
+[
+  {
+    "id": 10,
+    "roomId": 1,
+    "content": "hey everyone",
+    "messageType": "TEXT",
+    "mediaUrl": null,
+    "mediaContentType": null,
+    "mediaFileName": null,
+    "isEdited": false,
+    "isDeleted": false,
+    "createdAt": "2026-03-24T10:30:00",
+    "updatedAt": "2026-03-24T10:30:00",
+    "userInfo": {
+      "id": 2,
+      "username": "ram",
+      "profileImageUrl": "https://..."
     }
-    const names = [...typingUsers.values()].map(u => u.userName);
-    const text = names.length === 1
-        ? `${names[0]} is typing...`
-        : `${names.slice(0, -1).join(', ')} and ${names.at(-1)} are typing...`;
-    showTypingBanner(text);
+  }
+]
+```
+
+Important:
+
+- `mediaUrl` is resolved by the backend.
+- `profileImageUrl` is also resolved before the response is returned.
+
+### Get Room Members
+
+`GET /api/rooms/room/{roomId}`
+
+Response shape:
+
+```json
+[
+  {
+    "roomMemberId": 1,
+    "roomId": 1,
+    "userId": 2,
+    "username": "ram",
+    "profileImageUrl": "https://...",
+    "roomRole": "ADMIN",
+    "joinedAt": "2026-03-23T16:00:00"
+  }
+]
+```
+
+### Get Addable Friends
+
+`GET /api/rooms/room/{roomId}/add/friends`
+
+Returns the current user's friends who are not already in the room.
+
+### Create Group Room
+
+`POST /api/rooms/group`
+
+Request:
+
+```json
+{
+  "name": "General",
+  "description": "Main room",
+  "type": "GROUP"
 }
 ```
 
-### Sending (debounced)
+Response:
 
-```javascript
-let typingTimeout = null;
-
-function onInputChange(client, roomId, currentUserId, currentUserName) {
-    if (!typingTimeout) {
-        // send "started typing" only once per burst
-        client.publish({
-            destination: `/app/chat.typing/${roomId}`,
-            body: JSON.stringify({ userId: currentUserId, userName: currentUserName, typing: true }),
-        });
-    }
-
-    clearTimeout(typingTimeout);
-    typingTimeout = setTimeout(() => {
-        client.publish({
-            destination: `/app/chat.typing/${roomId}`,
-            body: JSON.stringify({ userId: currentUserId, userName: currentUserName, typing: false }),
-        });
-        typingTimeout = null;
-    }, 2000);
-}
-
-// Wire it up:
-inputElement.addEventListener('input', () => {
-    onInputChange(client, roomId, currentUserId, currentUserName);
-});
-
-// Also send "stopped" when the message is actually sent
-function sendTextMessage(client, roomId, content, currentUserId, currentUserName) {
-    clearTimeout(typingTimeout);
-    typingTimeout = null;
-    client.publish({
-        destination: `/app/chat.typing/${roomId}`,
-        body: JSON.stringify({ userId: currentUserId, userName: currentUserName, typing: false }),
-    });
-
-    client.publish({
-        destination: `/app/chat.send/${roomId}`,
-        body: JSON.stringify({ roomId, content }),
-    });
+```json
+{
+  "id": 1,
+  "name": "General",
+  "description": "Main room",
+  "members": [],
+  "messages": [],
+  "type": "GROUP",
+  "createdById": 1,
+  "createdAt": "2026-03-23T16:00:00",
+  "updatedAt": "2026-03-23T16:00:00"
 }
 ```
 
----
+The authenticated user is added as `ADMIN`.
 
-## 6. Room Members
+### Create Or Open DM
 
-Fetched via REST, not WebSocket. Use this when opening a room to display the member list.
+`POST /api/rooms/dm?userId={userId}`
 
-```javascript
-async function getRoomMembers(roomId, jwtToken) {
-    const res = await fetch(`${BASE_URL}/api/rooms/room/${roomId}`, {
-        headers: { Authorization: `Bearer ${jwtToken}` },
-    });
-    if (!res.ok) throw new Error('Failed to fetch members');
-    return res.json();
-}
+If the DM already exists, the backend returns it instead of creating a duplicate.
 
-// Example response:
-// [
-//   {
-//     roomMemberId: 1,
-//     roomId: 1,
-//     userId: 1,
-//     username: 'abhishek',
-//     profileImageUrl: 'profile/0dfe2ddf-6a94-4473-b27e-8318dec1e952_img_20260317_074328329-1-1.jpg',
-//     roomRole: 'ADMIN',
-//     joinedAt: '2026-03-25T16:11:09.210345'
-//   }
-// ]
+### Upgrade DM To Group
 
-// RoomMemberDto shape:
-// {
-//   roomMemberId: number,
-//   roomId: number,
-//   userId: number,
-//   username: string,
-//   profileImageUrl: string | null,  // can be null when no profile image
-//   roomRole: 'ADMIN' | 'MEMBER',
-//   joinedAt: string                 // ISO LocalDateTime: "2026-03-31T10:00:00"
-// }
-```
+`POST /api/rooms/room/{roomId}/group/create`
 
----
+Request:
 
-## 7. Friend Request Notifications
-
-
-These are user-specific — the server routes them using STOMP's user destination feature. The actual subscription path the client uses is `/user/queue/notifications`; the `/user/` prefix is resolved by the server to the current connected user.
-
-```javascript
-function subscribeToNotifications(client) {
-    client.subscribe('/user/queue/notifications', (frame) => {
-        const notification = JSON.parse(frame.body);
-        handleNotification(notification);
-    });
-}
-
-function handleNotification(notification) {
-    // notification shape:
-    // {
-    //   type: 'FRIEND_REQUEST_RECEIVED' | 'FRIEND_REQUEST_ACCEPTED'
-    //        | 'FRIEND_REQUEST_REJECTED' | 'FRIEND_REMOVED',
-    //   payload: FriendShipDto
-    // }
-
-    switch (notification.type) {
-        case 'FRIEND_REQUEST_RECEIVED':
-            showToast(`${notification.payload.requesterName} sent you a friend request`);
-            break;
-        case 'FRIEND_REQUEST_ACCEPTED':
-            // payload has no recipientName, only recipientId
-            showToast('Your friend request was accepted');
-            break;
-        case 'FRIEND_REQUEST_REJECTED':
-            showToast('Your friend request was declined');
-            break;
-        case 'FRIEND_REMOVED':
-            showToast('A friend removed you');
-            break;
-    }
+```json
+{
+  "userIds": [4, 5]
 }
 ```
 
----
+### Update Room Details
 
-## 8. Full Setup Example
+`PATCH /api/rooms/room/{roomId}`
 
-```javascript
-let stompClient = null;
+Request:
 
-function connect(jwtToken, currentUserId, currentUserName) {
-    stompClient = new Client({
-        webSocketFactory: () => new SockJS(`${BASE_URL}/ws`),
-        connectHeaders: { Authorization: `Bearer ${jwtToken}` },
-
-        onConnect: () => {
-            subscribeToNotifications(stompClient);
-            // join the active room if one is already open
-            if (activeRoomId) {
-                joinRoom(stompClient, activeRoomId);
-                subscribeToTyping(stompClient, activeRoomId, currentUserId);
-            }
-        },
-
-        reconnectDelay: 5000,
-    });
-
-    stompClient.activate();
-}
-
-function disconnect() {
-    clearTimeout(typingTimeout);
-    stompClient?.deactivate();
+```json
+{
+  "name": "New Name",
+  "description": "Updated description",
+  "userId": [4, 5]
 }
 ```
 
----
+Notes:
 
-## Quick Reference
+- `name` and `description` are optional.
+- `userId` is the list of user IDs to add.
 
-| Action | Direction | Destination |
-|---|---|---|
-| Connect | client → server | `SockJS /ws` (JWT in header) |
-| Send text message | client → server | `/app/chat.send/{roomId}` |
-| Receive room messages | server → client | `/topic/rooms/{roomId}` |
-| Send typing event | client → server | `/app/chat.typing/{roomId}` |
-| Receive typing events | server → client | `/topic/rooms/{roomId}/typing` |
-| Receive notifications | server → client | `/user/queue/notifications` |
-| Upload media | REST POST | `/api/rooms/room/{roomId}/message/media` |
+### Add Users To Room
+
+`POST /api/rooms/room/{roomId}/add`
+
+Request:
+
+```json
+{
+  "userIds": [4, 5]
+}
+```
+
+### Remove Members From Room
+
+`POST /api/rooms/room/{roomId}/remove`
+
+Request:
+
+```json
+{
+  "membersId": [2, 3]
+}
+```
+
+Important:
+
+- This endpoint is currently unsafe in the backend.
+- The current implementation calls `roomRepository.deleteAllById(deleteIds)` instead of removing room-member links.
+- Do not use it in production until the backend is corrected.
+
+## Messages
+
+### Send Text Message
+
+Text messages are sent over STOMP, not REST.
+
+- connect to `/ws`
+- publish to `/app/chat.send/{roomId}`
+- subscribe to `/topic/rooms/{roomId}`
+
+Payload:
+
+```json
+{
+  "roomId": 1,
+  "content": "hello"
+}
+```
+
+### Upload Image Or Video
+
+`POST /api/rooms/room/{roomId}/message/media`
+
+Use `multipart/form-data` with:
+
+- `file`: required image or video file
+- `content`: optional caption
+
+The backend accepts:
+
+- `image/*`
+- `video/*`
+
+Server-side file limit:
+
+- 10 MB
+
+Response shape:
+
+```json
+{
+  "id": 11,
+  "senderId": 2,
+  "roomId": 1,
+  "content": "weekend clip",
+  "messageType": "VIDEO",
+  "mediaUrl": "https://...",
+  "mediaContentType": "video/mp4",
+  "mediaFileName": "clip.mp4",
+  "isEdited": false,
+  "isDeleted": false,
+  "createdAt": "2026-03-24T10:35:00",
+  "updatedAt": "2026-03-24T10:35:00"
+}
+```
+
+The same payload is broadcast to `/topic/rooms/{roomId}`.
+
+### Search Messages In One Room
+
+`GET /api/rooms/{roomId}/messages/search?text=hello`
+
+### Search Messages Across Rooms
+
+`GET /api/rooms/messages/search?text=hello`
+
+## WebSocket Setup
+
+STOMP endpoint:
+
+- `/ws`
+
+Broker prefixes:
+
+- application prefix: `/app`
+- broker prefix: `/topic`
+- user prefix: `/user`
+
+Allowed frontend origins for websocket:
+
+- `http://localhost:5173`
+- `http://127.0.0.1:5173`
+- `https://kurakaani.me`
+- `http://192.168.1.19:5173`
+
+### Minimal Client
+
+```ts
+import { Client } from "@stomp/stompjs";
+import SockJS from "sockjs-client";
+
+export function createChatClient(token: string) {
+  return new Client({
+    webSocketFactory: () => new SockJS("http://localhost:8080/ws"),
+    connectHeaders: {
+      Authorization: `Bearer ${token}`
+    },
+    reconnectDelay: 5000
+  });
+}
+```
+
+### Connect Flow
+
+1. Load the JWT from storage.
+2. Create the SockJS connection.
+3. Send `Authorization: Bearer <jwt>` in STOMP `CONNECT` headers.
+4. Subscribe to room topics.
+
+### Room Subscription
+
+Subscribe to:
+
+- `/topic/rooms/{roomId}`
+
+You will receive message DTOs with this shape:
+
+```json
+{
+  "id": 10,
+  "senderId": 2,
+  "roomId": 1,
+  "content": "hello",
+  "messageType": "TEXT",
+  "mediaUrl": null,
+  "mediaContentType": null,
+  "mediaFileName": null,
+  "isEdited": false,
+  "isDeleted": false,
+  "createdAt": "2026-03-23T16:00:00",
+  "updatedAt": "2026-03-23T16:00:00"
+}
+```
+
+### Typing Indicator
+
+Send typing events to:
+
+- `/app/chat.typing/{roomId}`
+
+The backend republishes them to:
+
+- `/topic/rooms/{roomId}/typing`
+
+Payload shape:
+
+```json
+{
+  "userId": 2,
+  "userName": "ram",
+  "typing": true
+}
+```
+
+## Frontend Integration Order
+
+Recommended implementation order:
+
+1. Auth storage and token handling
+2. REST wrapper
+3. User profile page
+4. Rooms list and room details
+5. STOMP chat stream
+6. Media upload
+7. Friend request notifications
+
+## Known Backend Caveats
+
+- `POST /api/auth/register` currently returns `200 OK` with no body.
+- `POST /api/rooms/room/{roomId}/remove` is unsafe as implemented.
+- WebSocket auth depends on the STOMP `CONNECT` header being present and valid.

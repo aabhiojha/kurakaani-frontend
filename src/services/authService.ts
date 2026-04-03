@@ -14,6 +14,18 @@ export const loginWithPassword = (payload: LoginRequest) =>
 		body: JSON.stringify(payload),
 	})
 
+export const requestPasswordReset = (email: string) =>
+	publicFetch<void>('/api/auth/password-reset', {
+		method: 'POST',
+		body: JSON.stringify({ email }),
+	})
+
+export const confirmPasswordReset = (token: number, password: string) =>
+	publicFetch<void>('/api/auth/password-reset-confirm', {
+		method: 'POST',
+		body: JSON.stringify({ token, password }),
+	})
+
 export const getCurrentUser = () => apiFetch<CurrentUserResponse>('/api/user/me')
 
 export const uploadProfileImage = (file: File) => {

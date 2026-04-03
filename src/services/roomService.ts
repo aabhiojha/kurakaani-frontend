@@ -68,6 +68,16 @@ export const removeUsersFromRoom = (roomId: number, membersId: number[]) =>
 		body: JSON.stringify({ membersId }),
 	})
 
+export const uploadRoomImage = (roomId: number, file: File) => {
+	const formData = new FormData()
+	formData.append('file', file)
+
+	return apiFetch<void>(`/api/rooms/room/${roomId}/image/upload`, {
+		method: 'POST',
+		body: formData,
+	})
+}
+
 export const uploadRoomMedia = (roomId: number, file: File, content?: string) => {
 	const formData = new FormData()
 	formData.append('file', file)

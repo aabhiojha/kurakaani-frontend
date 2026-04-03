@@ -11,6 +11,7 @@ import type { FriendUserResponse } from '../../types/api/friend'
 
 const RIGHT_PANEL_MODE_STORAGE_KEY = 'kurakaani-chat-right-panel-mode'
 const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'kurakaani-chat-right-panel-width'
+const DRAFTS_STORAGE_KEY = 'kurakaani-chat-drafts'
 
 type ChatViewProps = {
 	conversation?: Conversation
@@ -27,6 +28,7 @@ type ChatViewProps = {
 	onAddUsersToRoom?: (conversationId: number, userIds: number[]) => Promise<void>
 	onUpdateRoomDetails?: (conversationId: number, updates: { name?: string; description?: string }) => Promise<void>
 	onRemoveMembersFromRoom?: (conversationId: number, memberIds: number[]) => Promise<void>
+	onRetryMessage?: (conversationId: number, messageId: number) => void
 	isSendDisabled?: boolean
 }
 
@@ -45,6 +47,7 @@ export function ChatView({
 	onAddUsersToRoom,
 	onUpdateRoomDetails,
 	onRemoveMembersFromRoom,
+	onRetryMessage,
 	isSendDisabled = false,
 }: ChatViewProps) {
 	if (!conversation) {
@@ -58,7 +61,21 @@ export function ChatView({
 		)
 	}
 
-	const [draft, setDraft] = useState('')
+	const [draftsByConversation, setDraftsByConversation] = useState<Record<number, string>>(() => {
+		if (typeof window === 'undefined') {
+			return {}
+		}
+
+		try {
+			const raw = window.sessionStorage.getItem(DRAFTS_STORAGE_KEY)
+			if (!raw) {
+				return {}
+			}
+			return JSON.parse(raw) as Record<number, string>
+		} catch {
+			return {}
+		}
+	})
 	const [isEmojiOpen, setIsEmojiOpen] = useState(false)
 	const [rightPanelMode, setRightPanelMode] = useState<'settings' | 'info' | null>(() => {
 		if (typeof window === 'undefined') {
@@ -94,6 +111,7 @@ export function ChatView({
 	const [searchStatus, setSearchStatus] = useState<string | null>(null)
 	const [isSearching, setIsSearching] = useState(false)
 	const [hasSearched, setHasSearched] = useState(false)
+	const [showJumpToLatest, setShowJumpToLatest] = useState(false)
 	const layoutRef = useRef<HTMLElement | null>(null)
 	const messagesContainerRef = useRef<HTMLDivElement | null>(null)
 	const messagesContentRef = useRef<HTMLDivElement | null>(null)
@@ -108,6 +126,7 @@ export function ChatView({
 		: false
 	const isRightPanelOpen = rightPanelMode !== null
 	const displayedMessages = hasSearched ? searchedMessages : messages
+	const draft = draftsByConversation[conversation.id] ?? ''
 
 	const getSenderKey = (message: Message) => {
 		if (typeof message.senderId === 'number' && message.senderId > 0) {
@@ -132,6 +151,13 @@ export function ChatView({
 		}
 
 		container.scrollTop = container.scrollHeight
+	}
+
+	const setDraftForConversation = (value: string) => {
+		setDraftsByConversation((previous) => ({
+			...previous,
+			[conversation.id]: value,
+		}))
 	}
 
 	const clearTypingStopTimeout = () => {
@@ -181,6 +207,7 @@ export function ChatView({
 		const handleScroll = () => {
 			const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight
 			shouldStickToBottomRef.current = distanceToBottom <= 24
+			setShowJumpToLatest(distanceToBottom > 120)
 		}
 
 		handleScroll()
@@ -193,6 +220,7 @@ export function ChatView({
 
 	useEffect(() => {
 		shouldStickToBottomRef.current = true
+		setShowJumpToLatest(false)
 		scrollMessagesToBottom()
 		requestAnimationFrame(() => {
 			scrollMessagesToBottom()
@@ -206,6 +234,7 @@ export function ChatView({
 		if (!shouldStickToBottomRef.current) {
 			return
 		}
+		setShowJumpToLatest(false)
 
 		scrollMessagesToBottom()
 		requestAnimationFrame(() => {
@@ -234,6 +263,14 @@ export function ChatView({
 			observer.disconnect()
 		}
 	}, [conversation.id])
+
+	useEffect(() => {
+		if (typeof window === 'undefined') {
+			return
+		}
+
+		window.sessionStorage.setItem(DRAFTS_STORAGE_KEY, JSON.stringify(draftsByConversation))
+	}, [draftsByConversation])
 
 	useEffect(() => {
 		const handleClickOutside = (event: MouseEvent) => {
@@ -354,7 +391,7 @@ export function ChatView({
 
 		stopTyping()
 		onSendMessage(conversation.id, cleaned)
-		setDraft('')
+		setDraftForConversation('')
 	}
 
 	const onSubmit = (event: FormEvent) => {
@@ -370,7 +407,7 @@ export function ChatView({
 	}
 
 	const onSelectEmoji = (emoji: string) => {
-		setDraft((prev) => `${prev}${emoji}`)
+		setDraftForConversation(`${draft}${emoji}`)
 		setIsEmojiOpen(false)
 		startTyping()
 	}
@@ -383,7 +420,7 @@ export function ChatView({
 
 		await onUploadMedia(conversation.id, file, draft)
 		stopTyping()
-		setDraft('')
+		setDraftForConversation('')
 		event.target.value = ''
 	}
 
@@ -485,8 +522,8 @@ export function ChatView({
 	}
 
 	return (
-		<section ref={layoutRef} className="motion-enter motion-stagger-2 flex min-w-0 flex-1 bg-[var(--bg-surface)]">
-			<div className="flex min-w-0 flex-1 flex-col">
+		<section ref={layoutRef} className="motion-enter motion-stagger-2 flex min-h-0 min-w-0 flex-1 bg-[var(--bg-surface)]">
+			<div className="flex min-h-0 min-w-0 flex-1 flex-col">
 				<header className="flex items-center justify-between border-b border-[var(--border)] px-3 py-3 sm:px-5 lg:px-6">
 					<div className="flex items-center gap-3">
 						<div className={`h-11 w-11 overflow-hidden rounded-full text-center text-[15px] leading-[2.75rem] font-semibold text-white ${conversation.isGroup ? 'bg-[var(--avatar-group-bg)]' : 'bg-[var(--bubble-sent)]'}`}>
@@ -568,7 +605,8 @@ export function ChatView({
 					</form>
 				)}
 
-				<div ref={messagesContainerRef} className="flex-1 overflow-y-auto bg-[var(--bg-surface-alt)] px-3 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6">
+				<div className="relative min-h-0 flex-1">
+				<div ref={messagesContainerRef} className="h-full min-h-0 overflow-y-auto bg-[var(--bg-surface-alt)] px-3 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6">
 				<div ref={messagesContentRef}>
 					{displayedMessages.length > 0 ? (
 						<>
@@ -585,6 +623,7 @@ export function ChatView({
 										message={message}
 										isGroupedWithPrevious={isGroupedWith(displayedMessages[index - 1], message)}
 										isGroupedWithNext={isGroupedWith(message, displayedMessages[index + 1])}
+										onRetry={(messageId) => onRetryMessage?.(conversation.id, messageId)}
 									/>
 								))}
 							</div>
@@ -600,6 +639,20 @@ export function ChatView({
 						</div>
 					)}
 				</div>
+				</div>
+				{showJumpToLatest && (
+					<button
+						type="button"
+						onClick={() => {
+							shouldStickToBottomRef.current = true
+							setShowJumpToLatest(false)
+							scrollMessagesToBottom()
+						}}
+						className="motion-interactive absolute bottom-4 right-4 rounded-full border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 text-xs font-semibold text-[var(--text-primary)] shadow-sm"
+					>
+						Jump to latest
+					</button>
+				)}
 				</div>
 
 				<div className="min-h-7 border-t border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1.5 sm:px-5 lg:px-6">
@@ -632,7 +685,7 @@ export function ChatView({
 							<textarea
 								value={draft}
 								onChange={(event) => {
-									setDraft(event.target.value)
+									setDraftForConversation(event.target.value)
 									if (event.target.value.trim().length === 0) {
 										stopTyping()
 										return

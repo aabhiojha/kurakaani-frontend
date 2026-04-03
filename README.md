@@ -71,3 +71,11 @@ export default defineConfig([
   },
 ])
 ```
+
+## Backend setup (development)
+
+The dev server proxies backend routes (`/api`, `/oauth2`, `/ws`) using `VITE_BACKEND_PROXY_TARGET`.
+
+- Default target is `http://localhost:8080`.
+- If your backend runs elsewhere, copy `.env.example` to `.env` and set `VITE_BACKEND_PROXY_TARGET`.
+- Restart `npm run dev` after changing `.env` values.

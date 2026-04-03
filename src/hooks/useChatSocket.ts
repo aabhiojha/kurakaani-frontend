@@ -12,13 +12,14 @@ import {
 import type { Conversation, Message } from '../types/chat'
 import type { CurrentUserResponse, SessionState } from '../types/api/session'
 import type { FriendshipResponse } from '../types/api/friend'
+import type { SidebarView } from '../components/layout/Sidebar'
 
 type SetMessages = React.Dispatch<React.SetStateAction<Record<number, Message[]>>>
 
 interface UseChatSocketParams {
 	session: SessionState | null
 	activeConversation: Conversation | undefined
-	activeView: string
+	activeView: SidebarView
 	currentUserProfile: CurrentUserResponse | undefined
 	messagesByConversation: Record<number, Message[]>
 	pendingMediaUploadsRef: React.MutableRefObject<Map<number, number>>
@@ -47,6 +48,7 @@ export function useChatSocket({
 	const subscribedTypingRoomIdRef = useRef<number | null>(null)
 	const pendingSentMessagesRef = useRef<Map<number, Map<string, number>>>(new Map())
 	const typingExpiryTimersRef = useRef<Map<string, number>>(new Map())
+	const tempMessageIdRef = useRef(-1)
 
 	const isWebSocketDebugEnabled =
 		import.meta.env.DEV &&
@@ -75,6 +77,71 @@ export function useChatSocket({
 			const next = { ...prev }
 			delete next[roomId]
 			return next
+		})
+	}
+
+	const incrementPendingMatch = (conversationId: number, text: string) => {
+		const normalized = normalizeMessageContent(text)
+		if (!normalized) {
+			return
+		}
+
+		const byRoom = pendingSentMessagesRef.current.get(conversationId) ?? new Map<string, number>()
+		byRoom.set(normalized, (byRoom.get(normalized) ?? 0) + 1)
+		pendingSentMessagesRef.current.set(conversationId, byRoom)
+	}
+
+	const decrementPendingMatch = (conversationId: number, text: string) => {
+		const normalized = normalizeMessageContent(text)
+		if (!normalized) {
+			return
+		}
+
+		const byRoom = pendingSentMessagesRef.current.get(conversationId)
+		const count = byRoom?.get(normalized) ?? 0
+		if (!byRoom || count <= 0) {
+			return
+		}
+
+		if (count === 1) {
+			byRoom.delete(normalized)
+		} else {
+			byRoom.set(normalized, count - 1)
+		}
+
+		if (byRoom.size === 0) {
+			pendingSentMessagesRef.current.delete(conversationId)
+		}
+	}
+
+	const nextTempMessageId = () => {
+		const next = tempMessageIdRef.current
+		tempMessageIdRef.current -= 1
+		return next
+	}
+
+	const markMessageStatus = (
+		conversationId: number,
+		messageId: number,
+		next: Pick<Message, 'deliveryState' | 'retryable'>,
+	) => {
+		setMessagesByConversation((prev) => {
+			const current = prev[conversationId] ?? []
+			const idx = current.findIndex((m) => m.id === messageId)
+			if (idx < 0) {
+				return prev
+			}
+
+			const updated = [...current]
+			updated[idx] = {
+				...updated[idx],
+				...next,
+			}
+
+			return {
+				...prev,
+				[conversationId]: updated,
+			}
 		})
 	}
 
@@ -110,53 +177,106 @@ export function useChatSocket({
 
 	const handleSendMessage = (conversationId: number, text: string) => {
 		handleTypingStop(conversationId)
-
-		const normalized = normalizeMessageContent(text)
-		if (normalized) {
-			const byRoom = pendingSentMessagesRef.current.get(conversationId) ?? new Map<string, number>()
-			byRoom.set(normalized, (byRoom.get(normalized) ?? 0) + 1)
-			pendingSentMessagesRef.current.set(conversationId, byRoom)
-		}
-
-		if (session?.accessToken) {
-			const sent = chatSocketRef.current.send(conversationId, text)
-			if (!sent) {
-				setBackendStatus('Disconnected from live chat. Message was not sent.')
-				if (normalized) {
-					const byRoom = pendingSentMessagesRef.current.get(conversationId)
-					const count = byRoom?.get(normalized) ?? 0
-					if (byRoom && count > 0) {
-						if (count === 1) byRoom.delete(normalized)
-						else byRoom.set(normalized, count - 1)
-						if (byRoom.size === 0) pendingSentMessagesRef.current.delete(conversationId)
-					}
-				}
-			}
+		const cleaned = text.trim()
+		if (!cleaned) {
 			return
 		}
 
-		// Offline optimistic message
+		const localMessageId = nextTempMessageId()
 		const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
 		setMessagesByConversation((prev) => {
 			const current = prev[conversationId] ?? []
-			const nextId = (current[current.length - 1]?.id ?? 0) + 1
 			return {
 				...prev,
 				[conversationId]: [
 					...current,
 					{
-						id: nextId,
+						id: localMessageId,
+						clientId: `${conversationId}:${Math.abs(localMessageId)}`,
 						isSent: true,
 						senderName: 'You',
 						senderAvatar: 'YO',
 						senderProfileImageUrl:
 							currentUserProfile?.profileImageUrl ?? session?.user.profileImageUrl,
 						senderId: session?.user.id,
-						text,
+						text: cleaned,
 						timestamp,
+						deliveryState: 'pending',
+						retryable: false,
 					},
 				],
 			}
+		})
+
+		incrementPendingMatch(conversationId, cleaned)
+
+		if (session?.accessToken) {
+			const sent = chatSocketRef.current.send(conversationId, cleaned)
+			if (!sent) {
+				decrementPendingMatch(conversationId, cleaned)
+				markMessageStatus(conversationId, localMessageId, {
+					deliveryState: 'failed',
+					retryable: true,
+				})
+				setBackendStatus('Disconnected from live chat. Message was not sent.')
+				return
+			}
+
+			markMessageStatus(conversationId, localMessageId, {
+				deliveryState: 'sent',
+				retryable: false,
+			})
+			return
+		}
+
+		decrementPendingMatch(conversationId, cleaned)
+		markMessageStatus(conversationId, localMessageId, {
+			deliveryState: 'failed',
+			retryable: true,
+		})
+	}
+
+	const handleRetryMessage = (conversationId: number, messageId: number) => {
+		const target = messagesByConversation[conversationId]?.find((message) => message.id === messageId)
+		if (!target) {
+			return
+		}
+
+		const cleaned = target.text.trim()
+		if (!cleaned) {
+			return
+		}
+
+		markMessageStatus(conversationId, messageId, {
+			deliveryState: 'pending',
+			retryable: false,
+		})
+		incrementPendingMatch(conversationId, cleaned)
+
+		if (!session?.accessToken) {
+			decrementPendingMatch(conversationId, cleaned)
+			markMessageStatus(conversationId, messageId, {
+				deliveryState: 'failed',
+				retryable: true,
+			})
+			return
+		}
+
+		const sent = chatSocketRef.current.send(conversationId, cleaned)
+		if (!sent) {
+			decrementPendingMatch(conversationId, cleaned)
+			markMessageStatus(conversationId, messageId, {
+				deliveryState: 'failed',
+				retryable: true,
+			})
+			setBackendStatus('Disconnected from live chat. Message was not sent.')
+			return
+		}
+
+		markMessageStatus(conversationId, messageId, {
+			deliveryState: 'sent',
+			retryable: false,
 		})
 	}
 
@@ -249,17 +369,31 @@ export function useChatSocket({
 
 		const appendIncomingMessage = (payload: ServerMessage) => {
 			setMessagesByConversation((prev) => {
-				const targetRoomId = payload.roomId ?? roomId
+				const payloadRoomId =
+					typeof payload.roomId === 'number' ? payload.roomId : Number(payload.roomId)
+				const targetRoomId = Number.isFinite(payloadRoomId) && payloadRoomId > 0 ? payloadRoomId : roomId
 				const current = prev[targetRoomId] ?? []
 				if (current.some((m) => m.id === payload.id)) return prev
 
 				const normalized = normalizeMessageContent(payload.content)
 				const byRoom = pendingSentMessagesRef.current.get(targetRoomId)
 				const pendingCount = normalized ? (byRoom?.get(normalized) ?? 0) : 0
+				const optimisticIndex = normalized
+					? current.findIndex(
+							(message) =>
+								message.isSent &&
+								(message.deliveryState === 'pending' || message.deliveryState === 'sent') &&
+								normalizeMessageContent(message.text) === normalized,
+						)
+					: -1
+				const hasOptimisticMatch = optimisticIndex >= 0
 				const isMedia = payload.messageType === 'IMAGE' || payload.messageType === 'VIDEO'
 				const pendingMedia = isMedia ? (pendingMediaUploadsRef.current.get(targetRoomId) ?? 0) : 0
 				const fromCurrentUser =
-					payload.senderId === session.user.id || pendingCount > 0 || (isMedia && pendingMedia > 0)
+					payload.senderId === session.user.id ||
+					pendingCount > 0 ||
+					hasOptimisticMatch ||
+					(isMedia && pendingMedia > 0)
 
 				if (byRoom && pendingCount > 0 && normalized) {
 					if (pendingCount === 1) byRoom.delete(normalized)
@@ -270,15 +404,6 @@ export function useChatSocket({
 				if (isMedia && pendingMedia > 0 && fromCurrentUser) {
 					if (pendingMedia === 1) pendingMediaUploadsRef.current.delete(targetRoomId)
 					else pendingMediaUploadsRef.current.set(targetRoomId, pendingMedia - 1)
-				}
-
-				const last = current[current.length - 1]
-				if (
-					fromCurrentUser &&
-					last?.isSent === true &&
-					normalizeMessageContent(last.text) === normalized
-				) {
-					return prev
 				}
 
 				const timestamp = payload.createdAt
@@ -294,29 +419,66 @@ export function useChatSocket({
 					? (currentUserProfile?.profileImageUrl ?? session.user.profileImageUrl)
 					: getKnownSenderProfileImageUrl(current, payload.senderId)
 
+				const resolvedMessage: Message = {
+					id: payload.id,
+					isSent: fromCurrentUser,
+					senderName,
+					senderAvatar: fromCurrentUser
+						? 'YO'
+						: getAvatarFromName(
+								senderName,
+								`U${String(payload.senderId ?? '').slice(-1) || 'S'}`,
+							),
+					senderProfileImageUrl,
+					senderId: payload.senderId,
+					text: payload.content ?? '',
+					timestamp,
+					messageType: payload.messageType ?? 'TEXT',
+					mediaUrl: payload.mediaUrl ?? undefined,
+					mediaContentType: payload.mediaContentType ?? undefined,
+					mediaFileName: payload.mediaFileName ?? undefined,
+					deliveryState: fromCurrentUser ? 'delivered' : undefined,
+					retryable: false,
+				}
+
+				if (fromCurrentUser && hasOptimisticMatch) {
+					const updated = [...current]
+					updated[optimisticIndex] = {
+						...updated[optimisticIndex],
+						...resolvedMessage,
+					}
+					return {
+						...prev,
+						[targetRoomId]: updated,
+					}
+				}
+
+				if (fromCurrentUser && normalized) {
+					const fallbackIndex = current.findIndex(
+						(message) =>
+							message.isSent &&
+							(message.deliveryState === 'pending' || message.deliveryState === 'sent') &&
+							normalizeMessageContent(message.text) === normalized,
+					)
+
+					if (fallbackIndex >= 0) {
+						const updated = [...current]
+						updated[fallbackIndex] = {
+							...updated[fallbackIndex],
+							...resolvedMessage,
+						}
+						return {
+							...prev,
+							[targetRoomId]: updated,
+						}
+					}
+				}
+
 				return {
 					...prev,
 					[targetRoomId]: [
 						...current,
-						{
-							id: payload.id,
-							isSent: fromCurrentUser,
-							senderName,
-							senderAvatar: fromCurrentUser
-								? 'YO'
-								: getAvatarFromName(
-										senderName,
-										`U${String(payload.senderId ?? '').slice(-1) || 'S'}`,
-									),
-							senderProfileImageUrl,
-							senderId: payload.senderId,
-							text: payload.content ?? '',
-							timestamp,
-							messageType: payload.messageType ?? 'TEXT',
-							mediaUrl: payload.mediaUrl ?? undefined,
-							mediaContentType: payload.mediaContentType ?? undefined,
-							mediaFileName: payload.mediaFileName ?? undefined,
-						},
+						resolvedMessage,
 					],
 				}
 			})
@@ -442,6 +604,7 @@ export function useChatSocket({
 		handleTypingStart,
 		handleTypingStop,
 		handleSendMessage,
+		handleRetryMessage,
 		disconnectAndCleanup,
 		pendingSentMessagesRef,
 	}

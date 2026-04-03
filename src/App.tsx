@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { LayoutPanelLeft, MessageSquare, MessagesSquare, PanelLeftClose } from 'lucide-react'
-import { AuthPage } from './components/auth/AuthPage'
+import { LoginPage } from './components/auth/LoginPage'
+import { PasswordResetPage } from './components/auth/PasswordResetPage'
+import { SignupPage } from './components/auth/SignupPage'
+import { TokenResetPage } from './components/auth/TokenResetPage'
 import { ChatView } from './components/chat/ChatView'
 import { FindPeoplePage } from './components/layout/FindPeoplePage'
 import { FriendRequestsPage } from './components/layout/FriendRequestsPage'
@@ -14,6 +17,8 @@ import {
 	getCurrentUser,
 	loginWithPassword,
 	logout,
+	confirmPasswordReset,
+	requestPasswordReset,
 	registerWithPassword,
 	saveSession,
 	uploadProfileImage,
@@ -43,6 +48,7 @@ const isSidebarView = (value: string | null): value is SidebarView =>
 	value === 'profile'
 
 function App() {
+	const [authView, setAuthView] = useState<'login' | 'signup' | 'password-reset' | 'token-reset'>('login')
 	const [activeView, setActiveView] = useState<SidebarView>(() => {
 		if (typeof window === 'undefined') return 'direct'
 		const saved = window.localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY)
@@ -57,7 +63,7 @@ function App() {
 	const { themeMode, isDarkMode, setThemeMode } = useTheme()
 
 	const layout = useLayout(activeView)
-	const { isMobile, isTablet, isDesktop, mobilePane, setMobilePane, isSidebarDrawerOpen, setIsSidebarDrawerOpen, isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed } = layout
+	const { isMobile, isDesktop, mobilePane, setMobilePane, isSidebarDrawerOpen, setIsSidebarDrawerOpen, isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed } = layout
 
 	const friendships = useFriendships()
 
@@ -113,7 +119,15 @@ function App() {
 			friendships.handleFriendshipNotification(type, payload, userId),
 		setBackendStatus,
 	})
-	const { isSocketConnected, typingUsersByConversation, handleTypingStart, handleTypingStop, handleSendMessage, disconnectAndCleanup } = chatSocket
+	const {
+		isSocketConnected,
+		typingUsersByConversation,
+		handleTypingStart,
+		handleTypingStop,
+		handleSendMessage,
+		handleRetryMessage,
+		disconnectAndCleanup,
+	} = chatSocket
 
 	const activeTypingUsers = activeConversation ? (typingUsersByConversation[activeConversation.id] ?? []) : []
 	const activeTypingText = useMemo(() => {
@@ -167,6 +181,17 @@ function App() {
 		if (!session?.accessToken || !activeConversation) return
 		void loadRoomMembers(activeConversation.id)
 	}, [activeConversation?.id, session?.accessToken])
+
+	// Refresh friendship data when opening friendship-related sections.
+	useEffect(() => {
+		if (!session?.accessToken) {
+			return
+		}
+
+		if (activeView === 'friend-requests' || activeView === 'people' || activeView === 'profile') {
+			void friendships.loadFriendships()
+		}
+	}, [activeView, session?.accessToken])
 
 	// Ensure global room membership when user profile resolves
 	useEffect(() => {
@@ -253,12 +278,37 @@ function App() {
 		}
 	}
 
+	const handlePasswordResetRequest = async (email: string): Promise<AuthActionResult> => {
+		setIsAuthSubmitting(true)
+		try {
+			await requestPasswordReset(email)
+			return { ok: true, message: 'If the email exists, a reset token has been sent.' }
+		} catch (error) {
+			return { ok: false, error: getErrorMessage(error, 'Password reset request failed. Please try again.') }
+		} finally {
+			setIsAuthSubmitting(false)
+		}
+	}
+
+	const handlePasswordResetConfirm = async (token: number, password: string): Promise<AuthActionResult> => {
+		setIsAuthSubmitting(true)
+		try {
+			await confirmPasswordReset(token, password)
+			return { ok: true, message: 'Password reset successful. You can now log in.' }
+		} catch (error) {
+			return { ok: false, error: getErrorMessage(error, 'Password reset confirmation failed. Please check the token and try again.') }
+		} finally {
+			setIsAuthSubmitting(false)
+		}
+	}
+
 	const handleLogout = () => {
 		logout()
 		disconnectAndCleanup()
 		friendships.clearFriendships()
 		clearRooms()
 		attemptedGlobalJoinIdsRef.clear()
+		setAuthView('login')
 		setSession(null)
 		setCurrentUserProfile(undefined)
 		setBackendStatus('Logged out. API requests now run without JWT.')
@@ -313,12 +363,38 @@ function App() {
 	if (!session?.accessToken) {
 		return (
 			<div data-theme={isDarkMode ? 'dark' : 'light'} className="min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)] antialiased">
-				<AuthPage
-					isSubmitting={isAuthSubmitting}
-					backendStatus={backendStatus}
-					onLogin={handleLogin}
-					onRegister={handleRegister}
-				/>
+				{authView === 'login' ? (
+					<LoginPage
+						isSubmitting={isAuthSubmitting}
+						backendStatus={backendStatus}
+						onLogin={handleLogin}
+						onSwitchToSignup={() => setAuthView('signup')}
+						onSwitchToPasswordReset={() => setAuthView('password-reset')}
+					/>
+				) : authView === 'signup' ? (
+					<SignupPage
+						isSubmitting={isAuthSubmitting}
+						backendStatus={backendStatus}
+						onRegister={handleRegister}
+						onSwitchToLogin={() => setAuthView('login')}
+					/>
+				) : authView === 'password-reset' ? (
+					<PasswordResetPage
+						isSubmitting={isAuthSubmitting}
+						backendStatus={backendStatus}
+						onRequestReset={handlePasswordResetRequest}
+						onSwitchToLogin={() => setAuthView('login')}
+						onSwitchToTokenPage={() => setAuthView('token-reset')}
+					/>
+				) : (
+					<TokenResetPage
+						isSubmitting={isAuthSubmitting}
+						backendStatus={backendStatus}
+						onConfirmReset={handlePasswordResetConfirm}
+						onSwitchToLogin={() => setAuthView('login')}
+						onSwitchToResetRequest={() => setAuthView('password-reset')}
+					/>
+				)}
 			</div>
 		)
 	}
@@ -337,6 +413,7 @@ function App() {
 		onAddUsersToRoom: handleAddUsersToRoom,
 		onUpdateRoomDetails: handleUpdateRoomDetails,
 		onRemoveMembersFromRoom: handleRemoveMembersFromRoom,
+		onRetryMessage: handleRetryMessage,
 		isSendDisabled: Boolean(session?.accessToken) && !isSocketConnected,
 	} as const
 

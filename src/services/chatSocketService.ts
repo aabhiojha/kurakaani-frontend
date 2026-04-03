@@ -39,6 +39,13 @@ export type NotificationEvent = {
 	payload: FriendshipResponse
 }
 
+type RawNotificationEvent = {
+	type?: NotificationType
+	payload?: FriendshipResponse
+	data?: FriendshipResponse
+	body?: FriendshipResponse
+}
+
 type ConnectOptions = {
 	onConnectChange?: (connected: boolean) => void
 	onError?: (error: string) => void
@@ -207,7 +214,15 @@ export class ChatSocketService {
 
 		this.notificationSubscription = this.client.subscribe('/user/queue/notifications', (frame: IMessage) => {
 			this.log('incoming notification frame', { body: frame.body })
-			onNotificationEvent(JSON.parse(frame.body) as NotificationEvent)
+			const rawEvent = JSON.parse(frame.body) as RawNotificationEvent
+			const type = rawEvent.type
+			const payload = rawEvent.payload ?? rawEvent.data ?? rawEvent.body
+
+			if (!type || !payload) {
+				return
+			}
+
+			onNotificationEvent({ type, payload })
 		})
 
 		this.log('subscribed to notifications', { destination: '/user/queue/notifications' })

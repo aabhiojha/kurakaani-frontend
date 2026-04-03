@@ -19,14 +19,39 @@ export function useFriendships() {
 	const loadFriendships = async () => {
 		setIsFriendshipsLoading(true)
 		try {
-			const [incoming, sent, accepted] = await Promise.all([
+			const [incomingResult, sentResult, acceptedResult] = await Promise.allSettled([
 				getIncomingFriendRequests(),
 				getSentFriendRequests(),
 				getFriends(),
 			])
-			setIncomingFriendRequests(incoming)
-			setSentFriendRequests(sent)
-			setFriends(accepted)
+
+			if (incomingResult.status === 'fulfilled') {
+				setIncomingFriendRequests(incomingResult.value)
+			} else {
+				setIncomingFriendRequests([])
+			}
+
+			if (sentResult.status === 'fulfilled') {
+				setSentFriendRequests(sentResult.value)
+			} else {
+				setSentFriendRequests([])
+			}
+
+			if (acceptedResult.status === 'fulfilled') {
+				setFriends(acceptedResult.value)
+			} else {
+				setFriends([])
+			}
+
+			if (
+				incomingResult.status === 'rejected' ||
+				sentResult.status === 'rejected' ||
+				acceptedResult.status === 'rejected'
+			) {
+				setFriendshipStatus('Some friendship data could not be loaded. Showing available results.')
+			} else {
+				setFriendshipStatus(null)
+			}
 		} catch {
 			setFriendshipStatus('Failed to load friendship data.')
 		} finally {
@@ -72,7 +97,7 @@ export function useFriendships() {
 			case 'FRIEND_REQUEST_ACCEPTED':
 				setIncomingFriendRequests((prev) => removeByParticipants(prev, payload))
 				setSentFriendRequests((prev) => removeByParticipants(prev, payload))
-				setFriends((prev) => upsert(prev, { ...payload, status: 'ACCEPTED' }))
+				void loadFriendships()
 				setFriendshipStatus(
 					`Friend request accepted by user ${payload.recipientId === currentUserId ? payload.requesterId : payload.recipientId}.`,
 				)
@@ -83,7 +108,11 @@ export function useFriendships() {
 				setFriendshipStatus('A friend request was rejected.')
 				break
 			case 'FRIEND_REMOVED':
-				setFriends((prev) => removeByParticipants(prev, payload))
+				setFriends((prev) =>
+					prev.filter(
+						(f) => f.userId !== payload.requesterId && f.userId !== payload.recipientId,
+					),
+				)
 				setFriendshipStatus('A friend removed you.')
 				break
 			default:

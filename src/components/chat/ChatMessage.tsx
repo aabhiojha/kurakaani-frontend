@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Check, CheckCheck, Loader2, RotateCcw } from 'lucide-react'
 import { resolveAssetUrl } from '../../lib/config'
 import type { Message } from '../../types/chat'
 
@@ -6,9 +7,10 @@ type ChatMessageProps = {
 	message: Message
 	isGroupedWithPrevious: boolean
 	isGroupedWithNext: boolean
+	onRetry?: (messageId: number) => void
 }
 
-export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext }: ChatMessageProps) {
+export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext, onRetry }: ChatMessageProps) {
 	const [isMetaVisible, setIsMetaVisible] = useState(false)
 	const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
 	const messageMetaRef = useRef<HTMLDivElement | null>(null)
@@ -17,6 +19,8 @@ export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext 
 	const mediaUrl = resolveAssetUrl(message.mediaUrl)
 	const senderAvatarUrl = resolveAssetUrl(message.senderProfileImageUrl)
 	const avatarTopSpacingClass = isGroupedWithPrevious ? 'mt-0' : 'mt-4'
+	const bubbleStateClass =
+		message.deliveryState === 'pending' ? 'opacity-75' : message.deliveryState === 'failed' ? 'opacity-80' : 'opacity-100'
 
 	useEffect(() => {
 		if (!isMetaVisible) {
@@ -88,7 +92,7 @@ export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext 
 								}}
 								role="button"
 								tabIndex={0}
-								className={`rounded-2xl px-3.5 py-2 text-sm leading-relaxed shadow-sm ${
+								className={`rounded-2xl px-3.5 py-2 text-sm leading-relaxed shadow-sm ${bubbleStateClass} ${
 									isRight
 										? 'rounded-br-sm bg-[var(--bubble-sent)] text-white'
 										: 'rounded-bl-sm bg-[var(--bubble-received)] text-[var(--text-primary)]'
@@ -135,13 +139,29 @@ export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext 
 							</div>
 						</div>
 						{!isGroupedWithNext && (
-							<button
-								type="button"
-								onClick={() => setIsMetaVisible((previous) => !previous)}
-								className="mt-0.5 px-1 text-xs text-[var(--text-muted)]"
-							>
-								{message.timestamp}
-							</button>
+							<div className="mt-0.5 flex items-center gap-1 px-1 text-xs text-[var(--text-muted)]">
+								<button
+									type="button"
+									onClick={() => setIsMetaVisible((previous) => !previous)}
+									className="text-xs text-[var(--text-muted)]"
+								>
+									{message.timestamp}
+								</button>
+								{isRight && message.deliveryState === 'pending' && <Loader2 size={11} className="animate-spin" />}
+								{isRight && message.deliveryState === 'sent' && <Check size={11} />}
+								{isRight && message.deliveryState === 'delivered' && <CheckCheck size={11} />}
+								{isRight && message.deliveryState === 'read' && <CheckCheck size={11} className="text-[var(--accent)]" />}
+								{isRight && message.deliveryState === 'failed' && (
+									<button
+										type="button"
+										onClick={() => onRetry?.(message.id)}
+										className="inline-flex items-center gap-1 text-[11px] text-red-500"
+									>
+										<RotateCcw size={10} />
+										failed — retry
+									</button>
+								)}
+							</div>
 						)}
 					</div>
 				</div>

@@ -66,6 +66,7 @@ export const mapRoomToConversation = (room: RoomSummaryResponse): Conversation =
 		time: room.recentMessage ? toConversationTime(room.recentMessage.sentAt) : '',
 		preview,
 		avatar: getAvatarFromName(room.name, isGroup ? 'GR' : 'DM'),
+		avatarImageUrl: room.roomImageUrl ?? undefined,
 		isGroup,
 		online: isGroup ? undefined : false,
 	}

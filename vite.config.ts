@@ -15,6 +15,8 @@ export default defineConfig({
     allowedHosts: [
       'localhost',
       '127.0.0.1',
+      'kurakaani.me',
+      'www.kurakaani.me',
       'unalimentary-emilie-flamboyantly.ngrok-free.dev'
     ],
     proxy: {
