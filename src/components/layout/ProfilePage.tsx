@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Camera, Mail, ShieldCheck, UserCircle, Users } from 'lucide-react'
 import { resolveAssetUrl } from '../../lib/config'
 import type { FriendUserResponse } from '../../types/api/friend'
@@ -12,6 +12,7 @@ type ProfilePageProps = {
 	}
 	isFriendshipsLoading: boolean
 	onUploadProfileImage?: (file: File) => Promise<void>
+	onUpdateProfile?: (updates: { userName?: string; email?: string }) => Promise<void>
 }
 
 const getAvatarLabel = (name?: string) => {
@@ -50,6 +51,7 @@ export function ProfilePage({
 	friendships,
 	isFriendshipsLoading,
 	onUploadProfileImage,
+	onUpdateProfile,
 }: ProfilePageProps) {
 	const displayName = session?.user.name || currentUser?.userName || 'Kurakaani User'
 	const username = currentUser?.userName ?? session?.user.name ?? 'Unavailable'
@@ -60,7 +62,20 @@ export function ProfilePage({
 	const enabledLabel = currentUser?.enabled === false ? 'Restricted' : 'Active'
 	const [uploadError, setUploadError] = useState<string | null>(null)
 	const [isUploading, setIsUploading] = useState(false)
+	const [editableUserName, setEditableUserName] = useState(username)
+	const [editableEmail, setEditableEmail] = useState(email)
+	const [isSavingProfile, setIsSavingProfile] = useState(false)
+	const [profileSaveError, setProfileSaveError] = useState<string | null>(null)
+	const [profileSaveStatus, setProfileSaveStatus] = useState<string | null>(null)
 	const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+	useEffect(() => {
+		setEditableUserName(username)
+	}, [username])
+
+	useEffect(() => {
+		setEditableEmail(email)
+	}, [email])
 
 	const handleProfileImageSelection = async (event: ChangeEvent<HTMLInputElement>) => {
 		const file = event.target.files?.[0]
@@ -78,6 +93,39 @@ export function ProfilePage({
 		} finally {
 			setIsUploading(false)
 			event.target.value = ''
+		}
+	}
+
+	const handleProfileSave = async (event: FormEvent<HTMLFormElement>) => {
+		event.preventDefault()
+		if (!onUpdateProfile) {
+			return
+		}
+
+		const nextUserName = editableUserName.trim()
+		const nextEmail = editableEmail.trim()
+
+		if (!nextUserName) {
+			setProfileSaveError('Username is required.')
+			return
+		}
+
+		if (!nextEmail) {
+			setProfileSaveError('Email is required.')
+			return
+		}
+
+		setProfileSaveError(null)
+		setProfileSaveStatus(null)
+		setIsSavingProfile(true)
+
+		try {
+			await onUpdateProfile({ userName: nextUserName, email: nextEmail })
+			setProfileSaveStatus('Profile updated successfully.')
+		} catch (error) {
+			setProfileSaveError(error instanceof Error ? error.message : 'Failed to update profile.')
+		} finally {
+			setIsSavingProfile(false)
 		}
 	}
 
@@ -161,7 +209,7 @@ export function ProfilePage({
 							</span>
 						</div>
 
-						<div className="grid gap-4 md:grid-cols-2">
+						<form onSubmit={handleProfileSave} className="grid gap-4 md:grid-cols-2">
 							<div className="text-sm font-medium text-[var(--text-secondary)]">
 								Display Name
 								<div className="mt-1.5 rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2.5 text-sm text-[var(--text-primary)]">
@@ -170,15 +218,21 @@ export function ProfilePage({
 							</div>
 							<div className="text-sm font-medium text-[var(--text-secondary)]">
 								Username
-								<div className="mt-1.5 rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2.5 text-sm text-[var(--text-primary)]">
-									{username}
-								</div>
+								<input
+									type="text"
+									value={editableUserName}
+									onChange={(event) => setEditableUserName(event.target.value)}
+									className="motion-focus mt-1.5 w-full rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
+								/>
 							</div>
 							<div className="text-sm font-medium text-[var(--text-secondary)]">
 								Email
-								<div className="mt-1.5 rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2.5 text-sm text-[var(--text-primary)]">
-									{email}
-								</div>
+								<input
+									type="email"
+									value={editableEmail}
+									onChange={(event) => setEditableEmail(event.target.value)}
+									className="motion-focus mt-1.5 w-full rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
+								/>
 							</div>
 							<div className="text-sm font-medium text-[var(--text-secondary)]">
 								Account Status
@@ -204,7 +258,18 @@ export function ProfilePage({
 									{roles.length > 0 ? roles.join(', ') : 'No roles assigned'}
 								</div>
 							</div>
-						</div>
+							<div className="md:col-span-2 flex items-center justify-end gap-3">
+								{profileSaveError && <p className="text-sm text-red-500">{profileSaveError}</p>}
+								{profileSaveStatus && <p className="text-sm text-[var(--text-secondary)]">{profileSaveStatus}</p>}
+								<button
+									type="submit"
+									disabled={isSavingProfile || !onUpdateProfile}
+									className="motion-interactive rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--bg-page)] disabled:cursor-not-allowed disabled:opacity-70"
+								>
+									{isSavingProfile ? 'Saving…' : 'Save Changes'}
+								</button>
+							</div>
+						</form>
 					</div>
 
 					<div className="rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)] p-5 shadow-sm sm:p-6">

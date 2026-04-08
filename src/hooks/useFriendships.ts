@@ -8,6 +8,7 @@ import {
 	sendFriendRequest,
 } from '../services/friendService'
 import type { FriendUserResponse, FriendshipResponse } from '../types/api/friend'
+import type { FriendRequestNotificationPayload } from '../services/chatSocketService'
 
 export function useFriendships() {
 	const [incomingFriendRequests, setIncomingFriendRequests] = useState<FriendshipResponse[]>([])
@@ -68,54 +69,38 @@ export function useFriendships() {
 
 	// Called by useChatSocket when a friendship notification arrives over WebSocket.
 	const handleFriendshipNotification = (
-		type: string,
-		payload: FriendshipResponse,
-		currentUserId: number,
+		payload: FriendRequestNotificationPayload,
+		_currentUserId: number,
 	) => {
-		const upsert = (items: FriendshipResponse[], item: FriendshipResponse) => {
-			const idx = items.findIndex((i) => i.id === item.id)
-			if (idx >= 0) {
-				const next = [...items]
-				next[idx] = item
-				return next
-			}
-			return [item, ...items]
-		}
+		void loadFriendships()
 
-		const removeByParticipants = (items: FriendshipResponse[], item: FriendshipResponse) =>
-			items.filter(
-				(i) =>
-					i.id !== item.id &&
-					!(i.requesterId === item.requesterId && i.recipientId === item.recipientId),
-			)
-
-		switch (type) {
-			case 'FRIEND_REQUEST_RECEIVED':
-				setIncomingFriendRequests((prev) => upsert(prev, payload))
-				setFriendshipStatus(`New friend request from user ${payload.requesterId}.`)
-				break
-			case 'FRIEND_REQUEST_ACCEPTED':
-				setIncomingFriendRequests((prev) => removeByParticipants(prev, payload))
-				setSentFriendRequests((prev) => removeByParticipants(prev, payload))
-				void loadFriendships()
+		switch (payload.event) {
+			case 'RECEIVED':
 				setFriendshipStatus(
-					`Friend request accepted by user ${payload.recipientId === currentUserId ? payload.requesterId : payload.recipientId}.`,
+					payload.senderName
+						? `New friend request from ${payload.senderName}.`
+						: 'You received a new friend request.',
 				)
 				break
-			case 'FRIEND_REQUEST_REJECTED':
-				setIncomingFriendRequests((prev) => removeByParticipants(prev, payload))
-				setSentFriendRequests((prev) => removeByParticipants(prev, payload))
-				setFriendshipStatus('A friend request was rejected.')
-				break
-			case 'FRIEND_REMOVED':
-				setFriends((prev) =>
-					prev.filter(
-						(f) => f.userId !== payload.requesterId && f.userId !== payload.recipientId,
-					),
+			case 'ACCEPTED':
+				setFriendshipStatus(
+					payload.senderName
+						? `${payload.senderName} accepted your friend request.`
+						: 'Your friend request was accepted.',
 				)
-				setFriendshipStatus('A friend removed you.')
+				break
+			case 'DECLINED':
+				setFriendshipStatus(
+					payload.senderName
+						? `${payload.senderName} declined your friend request.`
+						: 'A friend request was declined.',
+				)
+				break
+			case 'REMOVED':
+				setFriendshipStatus('A friendship was removed.')
 				break
 			default:
+				setFriendshipStatus('Friendship status updated.')
 				break
 		}
 	}

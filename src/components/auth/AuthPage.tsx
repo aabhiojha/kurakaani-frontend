@@ -6,7 +6,7 @@ type AuthPageProps = {
 	isSubmitting: boolean
 	backendStatus: string
 	onLogin: (username: string, password: string) => Promise<AuthActionResult>
-	onRegister: (username: string, email: string, password: string) => Promise<AuthActionResult>
+	onRegister: (username: string, email: string, password: string, confirmPassword: string) => Promise<AuthActionResult>
 }
 
 export function AuthPage({ isSubmitting, backendStatus, onLogin, onRegister }: AuthPageProps) {
@@ -15,6 +15,7 @@ export function AuthPage({ isSubmitting, backendStatus, onLogin, onRegister }: A
 	const [registerUsername, setRegisterUsername] = useState('')
 	const [registerEmail, setRegisterEmail] = useState('')
 	const [registerPassword, setRegisterPassword] = useState('')
+	const [registerConfirmPassword, setRegisterConfirmPassword] = useState('')
 	const [feedback, setFeedback] = useState<string | null>(null)
 
 	const handleLoginSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -35,9 +36,10 @@ export function AuthPage({ isSubmitting, backendStatus, onLogin, onRegister }: A
 		event.preventDefault()
 		setFeedback(null)
 
-		const result = await onRegister(registerUsername.trim(), registerEmail.trim(), registerPassword)
+		const result = await onRegister(registerUsername.trim(), registerEmail.trim(), registerPassword, registerConfirmPassword)
 		if (result.ok) {
 			setRegisterPassword('')
+			setRegisterConfirmPassword('')
 			setFeedback(result.message ?? 'Registration successful. Please log in.')
 			return
 		}
@@ -117,6 +119,16 @@ export function AuthPage({ isSubmitting, backendStatus, onLogin, onRegister }: A
 								required
 								value={registerPassword}
 								onChange={(event) => setRegisterPassword(event.target.value)}
+								className="motion-focus mt-1.5 w-full rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
+							/>
+						</label>
+						<label className="block text-xs font-medium text-[var(--text-secondary)]">
+							Confirm Password
+							<input
+								type="password"
+								required
+								value={registerConfirmPassword}
+								onChange={(event) => setRegisterConfirmPassword(event.target.value)}
 								className="motion-focus mt-1.5 w-full rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
 							/>
 						</label>

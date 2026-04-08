@@ -5,7 +5,7 @@ type AuthActionResult = { ok: true; message?: string } | { ok: false; error: str
 type SignupPageProps = {
 	isSubmitting: boolean
 	backendStatus: string
-	onRegister: (username: string, email: string, password: string) => Promise<AuthActionResult>
+	onRegister: (username: string, email: string, password: string, confirmPassword: string) => Promise<AuthActionResult>
 	onSwitchToLogin: () => void
 }
 
@@ -18,15 +18,17 @@ export function SignupPage({
 	const [username, setUsername] = useState('')
 	const [email, setEmail] = useState('')
 	const [password, setPassword] = useState('')
+	const [confirmPassword, setConfirmPassword] = useState('')
 	const [feedback, setFeedback] = useState<string | null>(null)
 
 	const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault()
 		setFeedback(null)
 
-		const result = await onRegister(username.trim(), email.trim(), password)
+		const result = await onRegister(username.trim(), email.trim(), password, confirmPassword)
 		if (result.ok) {
 			setPassword('')
+			setConfirmPassword('')
 			setFeedback(result.message ?? 'Registration successful.')
 			return
 		}
@@ -73,6 +75,16 @@ export function SignupPage({
 							required
 							value={password}
 							onChange={(event) => setPassword(event.target.value)}
+							className="motion-focus mt-1.5 w-full rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
+						/>
+					</label>
+					<label className="block text-xs font-medium text-[var(--text-secondary)]">
+						Confirm Password
+						<input
+							type="password"
+							required
+							value={confirmPassword}
+							onChange={(event) => setConfirmPassword(event.target.value)}
 							className="motion-focus mt-1.5 w-full rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
 						/>
 					</label>

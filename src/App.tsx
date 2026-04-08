@@ -20,6 +20,7 @@ import {
 	confirmPasswordReset,
 	requestPasswordReset,
 	registerWithPassword,
+	updateCurrentUser,
 	saveSession,
 	uploadProfileImage,
 } from './services/authService'
@@ -34,6 +35,7 @@ import { useRooms } from './hooks/useRooms'
 import { useChatSocket } from './hooks/useChatSocket'
 import type { ChatSection } from './types/chat'
 import type { CurrentUserResponse, SessionState } from './types/api/session'
+import type { NotificationEvent } from './services/chatSocketService'
 
 type AuthActionResult = { ok: true; message?: string } | { ok: false; error: string }
 
@@ -115,8 +117,7 @@ function App() {
 		messagesByConversation,
 		pendingMediaUploadsRef,
 		setMessagesByConversation,
-		onNotification: (type, payload, userId) =>
-			friendships.handleFriendshipNotification(type, payload, userId),
+		onNotification: (event, userId) => handleSocketNotification(event, userId),
 		setBackendStatus,
 	})
 	const {
@@ -264,13 +265,16 @@ function App() {
 		username: string,
 		email: string,
 		password: string,
+		confirmPassword: string,
 	): Promise<AuthActionResult> => {
 		setIsAuthSubmitting(true)
 		try {
-			await registerWithPassword({ username, email, password })
-			const authResponse = await loginWithPassword({ username, password })
-			await completeAuthenticatedSession(authResponse)
-			return { ok: true, message: 'Registration successful. You have been added to the global chat.' }
+			await registerWithPassword({ username, email, password, confirmPassword })
+			setAuthView('login')
+			return {
+				ok: true,
+				message: 'Registration successful. You can now log in with your new account.',
+			}
 		} catch (error) {
 			return { ok: false, error: getErrorMessage(error, 'Registration failed. Please try again.') }
 		} finally {
@@ -336,6 +340,59 @@ function App() {
 			return next
 		})
 		setBackendStatus('Profile image updated successfully.')
+	}
+
+	const handleUpdateProfile = async (updates: { userName?: string; email?: string }) => {
+		if (!session?.accessToken) {
+			throw new Error('Sign in to update your profile.')
+		}
+
+		const refreshed = await updateCurrentUser(updates)
+		setCurrentUserProfile(refreshed)
+		setSession((prev) => {
+			if (!prev) {
+				return prev
+			}
+
+			const next: SessionState = {
+				...prev,
+				user: {
+					...prev.user,
+					id: refreshed.id,
+					email: refreshed.email,
+					name: refreshed.userName,
+					roles: refreshed.roles,
+					profileImageUrl: refreshed.profileImageUrl,
+				},
+			}
+			saveSession(next)
+			return next
+		})
+
+		setBackendStatus('Profile updated successfully.')
+	}
+
+	function handleSocketNotification(event: NotificationEvent, userId: number) {
+		if (event.type === 'FRIEND_REQUEST') {
+			friendships.handleFriendshipNotification(event.payload, userId)
+			return
+		}
+
+		if (event.type === 'DM') {
+			const preview = 'preview' in event.payload ? event.payload.preview : undefined
+			setBackendStatus(preview ? `New direct message: ${preview}` : 'New direct message received.')
+			return
+		}
+
+		if (event.type === 'ROOM') {
+			const roomName = 'roomName' in event.payload ? event.payload.roomName : undefined
+			const preview = 'preview' in event.payload ? event.payload.preview : undefined
+			setBackendStatus(
+				roomName
+					? `New message in ${roomName}${preview ? `: ${preview}` : '.'}`
+					: 'New room message received.',
+			)
+		}
 	}
 
 	// ── Navigation handlers ───────────────────────────────────────────────────
@@ -463,6 +520,7 @@ function App() {
 					friendships={{ friends: friendships.friends }}
 					isFriendshipsLoading={friendships.isFriendshipsLoading}
 					onUploadProfileImage={handleUploadProfileImage}
+								onUpdateProfile={handleUpdateProfile}
 				/>
 			)
 		}
@@ -514,7 +572,7 @@ function App() {
 
 	return (
 		<div data-theme={isDarkMode ? 'dark' : 'light'} className="h-screen min-h-screen overflow-hidden bg-[var(--bg-page)] p-0 text-[var(--text-primary)] antialiased sm:p-2 lg:p-3">
-			<div className="relative flex h-full min-w-0 overflow-hidden rounded-none border border-[var(--border)] bg-[var(--bg-surface)] shadow-[var(--shadow-pane)] sm:rounded-[26px]">
+			<div className="relative flex h-full min-w-0 overflow-hidden rounded-none bg-[var(--bg-surface)] shadow-[var(--shadow-pane)] sm:rounded-[26px]">
 				{isDesktop && !isDesktopSidebarCollapsed && (
 					<Sidebar
 						activeView={activeView}
@@ -549,7 +607,7 @@ function App() {
 								onNewChat={handleNewChat}
 								currentUserName={sidebarUserName}
 								currentUserProfileImageUrl={sidebarUserProfileImageUrl}
-								className="h-full max-w-[84vw] bg-[var(--bg-soft)]"
+								className="h-full max-w-[84vw]"
 							/>
 						</div>
 					</div>

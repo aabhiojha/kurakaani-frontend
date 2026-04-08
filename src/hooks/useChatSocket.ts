@@ -11,7 +11,6 @@ import {
 } from '../lib/chatUtils'
 import type { Conversation, Message } from '../types/chat'
 import type { CurrentUserResponse, SessionState } from '../types/api/session'
-import type { FriendshipResponse } from '../types/api/friend'
 import type { SidebarView } from '../components/layout/Sidebar'
 
 type SetMessages = React.Dispatch<React.SetStateAction<Record<number, Message[]>>>
@@ -24,7 +23,7 @@ interface UseChatSocketParams {
 	messagesByConversation: Record<number, Message[]>
 	pendingMediaUploadsRef: React.MutableRefObject<Map<number, number>>
 	setMessagesByConversation: SetMessages
-	onNotification: (type: string, payload: FriendshipResponse, currentUserId: number) => void
+	onNotification: (event: NotificationEvent, currentUserId: number) => void
 	setBackendStatus: (status: string) => void
 }
 
@@ -330,8 +329,7 @@ export function useChatSocket({
 
 		const handleNotification = (event: NotificationEvent) => {
 			if (isWebSocketDebugEnabled) console.debug('[ChatSocket][Notifications] received', event)
-			if (!event.payload) return
-			onNotification(event.type, event.payload, session.user.id)
+			onNotification(event, session.user.id)
 		}
 
 		try {

@@ -19,6 +19,7 @@ export type LoginRequest = {
 export type RegisterRequest = {
 	username: string
 	password: string
+	confirmPassword: string
 	email: string
 }
 

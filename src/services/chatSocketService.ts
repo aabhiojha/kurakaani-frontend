@@ -28,22 +28,61 @@ export type TypingEvent = {
 	isTyping?: boolean
 }
 
-export type NotificationType =
+export type FriendRequestNotificationPayload = {
+	requestId?: string
+	event?: 'RECEIVED' | 'ACCEPTED' | 'DECLINED' | 'REMOVED'
+	senderName?: string
+	senderAvatar?: string | null
+	legacyFriendship?: FriendshipResponse
+}
+
+export type DmNotificationPayload = {
+	messageId?: string
+	roomId?: string
+	preview?: string
+	mediaType?: string | null
+}
+
+export type RoomNotificationPayload = {
+	roomId?: string
+	roomName?: string
+	event?: 'NEW_MESSAGE'
+	preview?: string
+}
+
+export type NotificationEvent =
+	| {
+			id?: string
+			timestamp?: string
+			type: 'FRIEND_REQUEST'
+			payload: FriendRequestNotificationPayload
+	  }
+	| {
+			id?: string
+			timestamp?: string
+			type: 'DM'
+			payload: DmNotificationPayload
+	  }
+	| {
+			id?: string
+			timestamp?: string
+			type: 'ROOM'
+			payload: RoomNotificationPayload
+	  }
+
+type LegacyNotificationType =
 	| 'FRIEND_REQUEST_RECEIVED'
 	| 'FRIEND_REQUEST_ACCEPTED'
 	| 'FRIEND_REQUEST_REJECTED'
 	| 'FRIEND_REMOVED'
 
-export type NotificationEvent = {
-	type: NotificationType
-	payload: FriendshipResponse
-}
-
 type RawNotificationEvent = {
-	type?: NotificationType
-	payload?: FriendshipResponse
-	data?: FriendshipResponse
-	body?: FriendshipResponse
+	id?: string
+	timestamp?: string
+	type?: string
+	payload?: unknown
+	data?: unknown
+	body?: unknown
 }
 
 type ConnectOptions = {
@@ -215,14 +254,64 @@ export class ChatSocketService {
 		this.notificationSubscription = this.client.subscribe('/user/queue/notifications', (frame: IMessage) => {
 			this.log('incoming notification frame', { body: frame.body })
 			const rawEvent = JSON.parse(frame.body) as RawNotificationEvent
-			const type = rawEvent.type
 			const payload = rawEvent.payload ?? rawEvent.data ?? rawEvent.body
 
-			if (!type || !payload) {
+			if (!rawEvent.type || !payload) {
 				return
 			}
 
-			onNotificationEvent({ type, payload })
+			if (rawEvent.type === 'FRIEND_REQUEST') {
+				onNotificationEvent({
+					id: rawEvent.id,
+					timestamp: rawEvent.timestamp,
+					type: 'FRIEND_REQUEST',
+					payload: payload as FriendRequestNotificationPayload,
+				})
+				return
+			}
+
+			if (rawEvent.type === 'DM') {
+				onNotificationEvent({
+					id: rawEvent.id,
+					timestamp: rawEvent.timestamp,
+					type: 'DM',
+					payload: payload as DmNotificationPayload,
+				})
+				return
+			}
+
+			if (rawEvent.type === 'ROOM') {
+				onNotificationEvent({
+					id: rawEvent.id,
+					timestamp: rawEvent.timestamp,
+					type: 'ROOM',
+					payload: payload as RoomNotificationPayload,
+				})
+				return
+			}
+
+			const legacyType = rawEvent.type as LegacyNotificationType
+			const legacyPayload = payload as FriendshipResponse
+			const legacyEventMap: Record<LegacyNotificationType, FriendRequestNotificationPayload['event']> = {
+				FRIEND_REQUEST_RECEIVED: 'RECEIVED',
+				FRIEND_REQUEST_ACCEPTED: 'ACCEPTED',
+				FRIEND_REQUEST_REJECTED: 'DECLINED',
+				FRIEND_REMOVED: 'REMOVED',
+			}
+
+			if (!(legacyType in legacyEventMap)) {
+				return
+			}
+
+			onNotificationEvent({
+				type: 'FRIEND_REQUEST',
+				payload: {
+					requestId: String(legacyPayload.id),
+					event: legacyEventMap[legacyType],
+					senderName: legacyPayload.requesterName ?? legacyPayload.recipientName,
+					legacyFriendship: legacyPayload,
+				},
+			})
 		})
 
 		this.log('subscribed to notifications', { destination: '/user/queue/notifications' })

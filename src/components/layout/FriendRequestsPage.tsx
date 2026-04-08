@@ -57,7 +57,9 @@ export function FriendRequestsPage({
 						<div className="space-y-3">
 							{friendships.incoming.map((friendship) => (
 								<div key={friendship.id} className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3">
-									<p className="text-sm font-semibold text-[var(--text-primary)]">From User #{friendship.requesterId}</p>
+									<p className="text-sm font-semibold text-[var(--text-primary)]">
+										From {friendship.requesterName ?? `User #${friendship.requesterId}`}
+									</p>
 									<p className="mt-1 text-xs text-[var(--text-muted)]">Pending request</p>
 									<div className="mt-3 flex gap-2">
 										<button
@@ -95,7 +97,9 @@ export function FriendRequestsPage({
 						<div className="space-y-3">
 							{friendships.sent.map((friendship) => (
 								<div key={friendship.id} className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3">
-									<p className="text-sm font-semibold text-[var(--text-primary)]">To User #{friendship.recipientId}</p>
+									<p className="text-sm font-semibold text-[var(--text-primary)]">
+										To {friendship.recipientName ?? `User #${friendship.recipientId}`}
+									</p>
 									<p className="mt-1 text-xs text-[var(--text-muted)]">Awaiting response</p>
 									<div className="mt-3">
 										<button

@@ -28,6 +28,12 @@ export const confirmPasswordReset = (token: number, password: string) =>
 
 export const getCurrentUser = () => apiFetch<CurrentUserResponse>('/api/user/me')
 
+export const updateCurrentUser = (payload: { userName?: string; email?: string }) =>
+	apiFetch<CurrentUserResponse>('/api/user/me', {
+		method: 'PATCH',
+		body: JSON.stringify(payload),
+	})
+
 export const uploadProfileImage = (file: File) => {
 	const formData = new FormData()
 	formData.append('file', file)
