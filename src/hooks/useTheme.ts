@@ -4,6 +4,9 @@ export type ThemeMode = 'light' | 'dark' | 'system'
 
 const THEME_STORAGE_KEY = 'kurakaani-theme'
 
+const getSystemPrefersDark = () =>
+	typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
+
 export function useTheme() {
 	const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
 		if (typeof window === 'undefined') return 'system'
@@ -12,10 +15,7 @@ export function useTheme() {
 		return 'system'
 	})
 
-	const [systemPrefersDark, setSystemPrefersDark] = useState(() => {
-		if (typeof window === 'undefined') return false
-		return window.matchMedia('(prefers-color-scheme: dark)').matches
-	})
+	const [systemPrefersDark, setSystemPrefersDark] = useState(getSystemPrefersDark)
 
 	const isDarkMode = themeMode === 'system' ? systemPrefersDark : themeMode === 'dark'
 
@@ -26,7 +26,6 @@ export function useTheme() {
 	useEffect(() => {
 		const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
 		const handleChange = (event: MediaQueryListEvent) => setSystemPrefersDark(event.matches)
-		setSystemPrefersDark(mediaQuery.matches)
 		mediaQuery.addEventListener('change', handleChange)
 		return () => mediaQuery.removeEventListener('change', handleChange)
 	}, [])

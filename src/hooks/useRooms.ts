@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
 	addUsersToRoom,
 	createGroupRoom,
@@ -156,11 +156,11 @@ export function useRooms(
 
 		void syncRooms()
 		return () => { cancelled = true }
-	}, [session?.accessToken, session?.user.id])
+	}, [session?.accessToken, session?.user.id, session?.user.name, setBackendStatus])
 
 	// ── Internal helpers ──────────────────────────────────────────────────────
 
-	const loadRoomMembers = async (roomId: number) => {
+	const loadRoomMembers = useCallback(async (roomId: number) => {
 		setIsRoomMembersLoading(true)
 		try {
 			const members = await getRoomMembers(roomId)
@@ -175,9 +175,9 @@ export function useRooms(
 		} finally {
 			setIsRoomMembersLoading(false)
 		}
-	}
+	}, [])
 
-	const updateConversationSummary = (
+	const updateConversationSummary = useCallback((
 		roomId: number,
 		updates: { name?: string; description?: string; memberCount?: number },
 	) => {
@@ -200,9 +200,9 @@ export function useRooms(
 			}
 			return { ...prev, direct: prev.direct.map(apply), groups: prev.groups.map(apply) }
 		})
-	}
+	}, [])
 
-	const buildConversation = (
+	const buildConversation = useCallback((
 		roomId: number,
 		name: string,
 		description: string,
@@ -218,9 +218,9 @@ export function useRooms(
 		avatar: name.split(' ').map((p) => p[0]?.toUpperCase()).filter(Boolean).slice(0, 2).join('') || (isGroup ? 'GR' : 'DM'),
 		isGroup,
 		online: isGroup ? undefined : true,
-	})
+	}), [])
 
-	const addLocalConversation = (conversation: Conversation, systemText: string) => {
+	const addLocalConversation = useCallback((conversation: Conversation, systemText: string) => {
 		const section = conversation.isGroup ? 'groups' : 'direct'
 		setConversationsState((prev) => ({
 			...prev,
@@ -234,11 +234,11 @@ export function useRooms(
 			],
 		}))
 		setSelectedConversationId(conversation.id)
-	}
+	}, [])
 
 	// ── Public handlers ───────────────────────────────────────────────────────
 
-	const handleCreateGroup = async (name: string, description: string) => {
+	const handleCreateGroup = useCallback(async (name: string, description: string) => {
 		if (!session?.accessToken) {
 			const id = Date.now()
 			addLocalConversation(buildConversation(id, name, description, true), `Room "${name}" created.`)
@@ -256,12 +256,16 @@ export function useRooms(
 		} catch {
 			return { ok: false as const, error: 'Backend room creation failed. Please try again.' }
 		}
-	}
+	}, [addLocalConversation, buildConversation, setActiveView, session?.accessToken, setBackendStatus])
 
-	const handleCreateDirect = async (name: string, _description?: string) => {
+	const handleCreateDirect = useCallback(async (name: string, description?: string) => {
+		const nextDescription = description?.trim() ?? ''
 		if (!session?.accessToken) {
 			const id = Date.now()
-			addLocalConversation(buildConversation(id, name, '', false), `Direct chat with "${name}" created.`)
+			addLocalConversation(
+				buildConversation(id, name, nextDescription, false),
+				`Direct chat with "${name}" created.`,
+			)
 			setActiveView('direct')
 			setBackendStatus('Direct chat created locally. Sign in to create DMs on backend.')
 			return { ok: true as const }
@@ -274,7 +278,7 @@ export function useRooms(
 			const room = (await createOrGetDirectRoom(userId)) as { id?: number }
 			const id = typeof room?.id === 'number' ? room.id : Date.now()
 			addLocalConversation(
-				buildConversation(id, `User #${userId}`, '', false),
+				buildConversation(id, `User #${userId}`, nextDescription, false),
 				`Direct chat with "User #${userId}" created.`,
 			)
 			setActiveView('direct')
@@ -283,9 +287,9 @@ export function useRooms(
 		} catch {
 			return { ok: false as const, error: 'Backend direct chat creation failed. Use a valid target user ID.' }
 		}
-	}
+	}, [addLocalConversation, buildConversation, setActiveView, session?.accessToken, setBackendStatus])
 
-	const handleAddUsersToRoom = async (conversationId: number, userIds: number[]) => {
+	const handleAddUsersToRoom = useCallback(async (conversationId: number, userIds: number[]) => {
 		const conversation =
 			conversationsState.direct.find((c) => c.id === conversationId) ??
 			conversationsState.groups.find((c) => c.id === conversationId)
@@ -313,9 +317,9 @@ export function useRooms(
 		setBackendStatus(
 			`Added ${userIds.length} user${userIds.length === 1 ? '' : 's'} to room ${conversationId}.`,
 		)
-	}
+	}, [loadRoomMembers, updateConversationSummary, setActiveView, conversationsState, setBackendStatus])
 
-	const handleUpdateRoomDetails = async (
+	const handleUpdateRoomDetails = useCallback(async (
 		conversationId: number,
 		updates: { name?: string; description?: string },
 	) => {
@@ -331,18 +335,18 @@ export function useRooms(
 		})
 		setRoomMembersByConversation((prev) => ({ ...prev, [conversationId]: updatedRoom.members }))
 		setBackendStatus(`Updated room ${conversationId} settings.`)
-	}
+	}, [updateConversationSummary, setBackendStatus])
 
-	const handleRemoveMembersFromRoom = async (conversationId: number, memberIds: number[]) => {
+	const handleRemoveMembersFromRoom = useCallback(async (conversationId: number, memberIds: number[]) => {
 		await removeUsersFromRoom(conversationId, memberIds)
 		const members = await loadRoomMembers(conversationId)
 		updateConversationSummary(conversationId, { memberCount: members.length })
 		setBackendStatus(
 			`Removed ${memberIds.length} member${memberIds.length === 1 ? '' : 's'} from room ${conversationId}.`,
 		)
-	}
+	}, [loadRoomMembers, updateConversationSummary, setBackendStatus])
 
-	const handleUploadMedia = async (conversationId: number, file: File, caption?: string) => {
+	const handleUploadMedia = useCallback(async (conversationId: number, file: File, caption?: string) => {
 		if (!session?.accessToken) {
 			setBackendStatus('Sign in to upload images or videos.')
 			return
@@ -394,17 +398,17 @@ export function useRooms(
 			else pendingMediaUploadsRef.current.set(conversationId, count - 1)
 			setBackendStatus(getErrorMessage(error, 'Media upload failed. Please try again.'))
 		}
-	}
+	}, [currentUserProfile?.profileImageUrl, pendingMediaUploadsRef, session?.accessToken, session?.user.id, session?.user.profileImageUrl, setBackendStatus, setMessagesByConversation])
 
-	const clearRooms = () => {
+	const clearRooms = useCallback(() => {
 		setConversationsState({ direct: [], groups: [] })
 		setMessagesByConversation({})
 		setSelectedConversationId(null)
 		setRoomMembersByConversation({})
 		pendingMediaUploadsRef.current.clear()
-	}
+	}, [pendingMediaUploadsRef, setMessagesByConversation])
 
-	return {
+	return useMemo(() => ({
 		conversationsState,
 		setConversationsState,
 		messagesByConversation,
@@ -425,5 +429,22 @@ export function useRooms(
 		handleRemoveMembersFromRoom,
 		handleUploadMedia,
 		clearRooms,
-	}
+	}), [
+		conversationsState,
+		messagesByConversation,
+		selectedConversationId,
+		newChatTrigger,
+		roomMembersByConversation,
+		roomMembersStatus,
+		isRoomMembersLoading,
+		loadRoomMembers,
+		handleCreateGroup,
+		handleCreateDirect,
+		handleAddUsersToRoom,
+		handleUpdateRoomDetails,
+		handleRemoveMembersFromRoom,
+		handleUploadMedia,
+		clearRooms,
+		pendingMediaUploadsRef,
+	])
 }

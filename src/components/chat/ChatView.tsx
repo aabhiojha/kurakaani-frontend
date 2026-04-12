@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react'
 import { CircleEllipsis, Image as ImageIcon, Plus, Search, SendHorizontal, Smile, UserPlus, Users } from 'lucide-react'
 import { ChatMessage } from './ChatMessage'
@@ -50,16 +50,10 @@ export function ChatView({
 	onRetryMessage,
 	isSendDisabled = false,
 }: ChatViewProps) {
-	if (!conversation) {
-		return (
-			<section className="motion-enter motion-stagger-2 flex min-w-0 flex-1 flex-col items-center justify-center bg-[var(--bg-surface)]">
-				<div className="text-center">
-					<h2 className="text-lg font-semibold text-[var(--text-primary)]">Click on a group to start chatting</h2>
-					<p className="text-[var(--text-secondary)]">Pick a group from the list to open the conversation.</p>
-				</div>
-			</section>
-		)
-	}
+	const conversationId = conversation?.id
+	const conversationName = conversation?.name ?? 'Conversation'
+	const conversationDescription = conversation?.description ?? ''
+	const conversationIsGroup = conversation?.isGroup ?? false
 
 	const [draftsByConversation, setDraftsByConversation] = useState<Record<number, string>>(() => {
 		if (typeof window === 'undefined') {
@@ -98,8 +92,8 @@ export function ChatView({
 		return Math.max(320, Math.min(560, saved))
 	})
 	const [isResizingRightPanel, setIsResizingRightPanel] = useState(false)
-	const [roomNameInput, setRoomNameInput] = useState(conversation.name)
-	const [roomDescriptionInput, setRoomDescriptionInput] = useState(conversation.description ?? '')
+	const [roomNameInput, setRoomNameInput] = useState(conversationName)
+	const [roomDescriptionInput, setRoomDescriptionInput] = useState(conversationDescription)
 	const [roomSettingsError, setRoomSettingsError] = useState<string | null>(null)
 	const [isUpdatingRoom, setIsUpdatingRoom] = useState(false)
 	const [removingMemberId, setRemovingMemberId] = useState<number | null>(null)
@@ -121,12 +115,12 @@ export function ChatView({
 	const isTypingBurstActiveRef = useRef(false)
 	const shouldStickToBottomRef = useRef(true)
 	const emojiOptions = ['😀', '😂', '😍', '👍', '🔥', '🎉', '🙏', '💬']
-	const isCurrentUserAdmin = conversation.isGroup && typeof currentUserId === 'number'
+	const isCurrentUserAdmin = conversationIsGroup && typeof currentUserId === 'number'
 		? roomMembers.some((member) => member.userId === currentUserId && member.roomRole.toUpperCase() === 'ADMIN')
 		: false
 	const isRightPanelOpen = rightPanelMode !== null
 	const displayedMessages = hasSearched ? searchedMessages : messages
-	const draft = draftsByConversation[conversation.id] ?? ''
+	const draft = conversationId ? draftsByConversation[conversationId] ?? '' : ''
 
 	const getSenderKey = (message: Message) => {
 		if (typeof message.senderId === 'number' && message.senderId > 0) {
@@ -154,22 +148,26 @@ export function ChatView({
 	}
 
 	const setDraftForConversation = (value: string) => {
+		if (!conversationId) {
+			return
+		}
+
 		setDraftsByConversation((previous) => ({
 			...previous,
-			[conversation.id]: value,
+			[conversationId]: value,
 		}))
 	}
 
-	const clearTypingStopTimeout = () => {
+	const clearTypingStopTimeout = useCallback(() => {
 		if (typingStopTimeoutRef.current === null) {
 			return
 		}
 
 		window.clearTimeout(typingStopTimeoutRef.current)
 		typingStopTimeoutRef.current = null
-	}
+	}, [])
 
-	const stopTyping = () => {
+	const stopTyping = useCallback(() => {
 		clearTypingStopTimeout()
 
 		if (!isTypingBurstActiveRef.current) {
@@ -177,26 +175,30 @@ export function ChatView({
 		}
 
 		isTypingBurstActiveRef.current = false
-		onTypingStop?.(conversation.id)
-	}
+		if (!conversationId) {
+			return
+		}
 
-	const startTyping = () => {
-		if (isSendDisabled || !onTypingStart || !onTypingStop) {
+		onTypingStop?.(conversationId)
+	}, [clearTypingStopTimeout, conversationId, onTypingStop])
+
+	const startTyping = useCallback(() => {
+		if (isSendDisabled || !onTypingStart || !onTypingStop || !conversationId) {
 			return
 		}
 
 		if (!isTypingBurstActiveRef.current) {
-			onTypingStart(conversation.id)
+			onTypingStart(conversationId)
 			isTypingBurstActiveRef.current = true
 		}
 
 		clearTypingStopTimeout()
 		typingStopTimeoutRef.current = window.setTimeout(() => {
 			isTypingBurstActiveRef.current = false
-			onTypingStop(conversation.id)
+			onTypingStop(conversationId)
 			typingStopTimeoutRef.current = null
 		}, 2000)
-	}
+	}, [conversationId, isSendDisabled, onTypingStart, onTypingStop, clearTypingStopTimeout])
 
 	useEffect(() => {
 		const container = messagesContainerRef.current
@@ -216,7 +218,7 @@ export function ChatView({
 		return () => {
 			container.removeEventListener('scroll', handleScroll)
 		}
-	}, [conversation.id])
+	}, [conversationId])
 
 	useEffect(() => {
 		shouldStickToBottomRef.current = true
@@ -228,7 +230,7 @@ export function ChatView({
 		window.setTimeout(() => {
 			scrollMessagesToBottom()
 		}, 80)
-	}, [conversation.id])
+	}, [conversationId])
 
 	useEffect(() => {
 		if (!shouldStickToBottomRef.current) {
@@ -262,7 +264,7 @@ export function ChatView({
 		return () => {
 			observer.disconnect()
 		}
-	}, [conversation.id])
+	}, [conversationId])
 
 	useEffect(() => {
 		if (typeof window === 'undefined') {
@@ -290,8 +292,8 @@ export function ChatView({
 	}, [])
 
 	useEffect(() => {
-		setRoomNameInput(conversation.name)
-		setRoomDescriptionInput(conversation.description ?? '')
+		setRoomNameInput(conversationName)
+		setRoomDescriptionInput(conversationDescription)
 		setRoomSettingsError(null)
 		setAddableFriends([])
 		setIsSearchOpen(false)
@@ -299,20 +301,20 @@ export function ChatView({
 		setSearchedMessages([])
 		setSearchStatus(null)
 		setHasSearched(false)
-	}, [conversation.id])
+	}, [conversationId, conversationName, conversationDescription])
 
 	useEffect(() => {
-		if (rightPanelMode !== 'settings' || !conversation.id) return
+		if (rightPanelMode !== 'settings' || !conversationId) return
 		let disposed = false
 
 		setIsLoadingAddable(true)
-		getAddableFriends(conversation.id)
+		getAddableFriends(conversationId)
 			.then((data) => { if (!disposed) setAddableFriends(data) })
 			.catch(() => { if (!disposed) setAddableFriends([]) })
 			.finally(() => { if (!disposed) setIsLoadingAddable(false) })
 
 		return () => { disposed = true }
-	}, [rightPanelMode, conversation.id])
+	}, [rightPanelMode, conversationId])
 
 	useEffect(() => {
 		if (!isCurrentUserAdmin) {
@@ -324,7 +326,7 @@ export function ChatView({
 		return () => {
 			stopTyping()
 		}
-	}, [conversation.id])
+	}, [conversationId, stopTyping])
 
 	useEffect(() => {
 		if (typeof window === 'undefined') {
@@ -390,7 +392,8 @@ export function ChatView({
 		}
 
 		stopTyping()
-		onSendMessage(conversation.id, cleaned)
+		if (!conversationId) return
+		onSendMessage(conversationId, cleaned)
 		setDraftForConversation('')
 	}
 
@@ -418,7 +421,8 @@ export function ChatView({
 			return
 		}
 
-		await onUploadMedia(conversation.id, file, draft)
+		if (!conversationId) return
+		await onUploadMedia(conversationId, file, draft)
 		stopTyping()
 		setDraftForConversation('')
 		event.target.value = ''
@@ -443,7 +447,8 @@ export function ChatView({
 		setIsUpdatingRoom(true)
 
 		try {
-			await onUpdateRoomDetails(conversation.id, {
+			if (!conversationId) return
+			await onUpdateRoomDetails(conversationId, {
 				name: nextName,
 				description: nextDescription,
 			})
@@ -463,7 +468,8 @@ export function ChatView({
 		setRemovingMemberId(memberId)
 
 		try {
-			await onRemoveMembersFromRoom(conversation.id, [memberId])
+			if (!conversationId) return
+			await onRemoveMembersFromRoom(conversationId, [memberId])
 		} catch (error) {
 			setRoomSettingsError(error instanceof Error ? error.message : 'Failed to remove member.')
 		} finally {
@@ -474,12 +480,15 @@ export function ChatView({
 	const handleAddFriend = async (userId: number) => {
 		// Let parent handle the room members refresh (it owns roomMembers prop)
 		if (onAddUsersToRoom) {
-			await onAddUsersToRoom(conversation.id, [userId])
+			if (!conversationId) return
+			await onAddUsersToRoom(conversationId, [userId])
 		} else {
-			await addUsersToRoom(conversation.id, [userId])
+			if (!conversationId) return
+			await addUsersToRoom(conversationId, [userId])
 		}
 		// Refresh our local addable list so the added friend disappears from it
-		const updatedAddable = await getAddableFriends(conversation.id)
+		if (!conversationId) return
+		const updatedAddable = await getAddableFriends(conversationId)
 		setAddableFriends(updatedAddable)
 	}
 
@@ -503,7 +512,8 @@ export function ChatView({
 		setSearchStatus(null)
 
 		try {
-			const results = await searchMessagesInRoom(conversation.id, trimmed)
+			if (!conversationId) return
+			const results = await searchMessagesInRoom(conversationId, trimmed)
 			const mapped = mapSearchedMessagesToMessages(results, currentUserId, roomMembers)
 			setSearchedMessages(mapped)
 			setSearchStatus(
@@ -519,6 +529,17 @@ export function ChatView({
 		} finally {
 			setIsSearching(false)
 		}
+	}
+
+	if (!conversation) {
+		return (
+			<section className="motion-enter motion-stagger-2 flex min-w-0 flex-1 flex-col items-center justify-center bg-[var(--bg-surface)]">
+				<div className="text-center">
+					<h2 className="text-lg font-semibold text-[var(--text-primary)]">Click on a group to start chatting</h2>
+					<p className="text-[var(--text-secondary)]">Pick a group from the list to open the conversation.</p>
+				</div>
+			</section>
+		)
 	}
 
 	return (
@@ -623,7 +644,11 @@ export function ChatView({
 										message={message}
 										isGroupedWithPrevious={isGroupedWith(displayedMessages[index - 1], message)}
 										isGroupedWithNext={isGroupedWith(message, displayedMessages[index + 1])}
-										onRetry={(messageId) => onRetryMessage?.(conversation.id, messageId)}
+										onRetry={(messageId) => {
+											if (conversationId) {
+												onRetryMessage?.(conversationId, messageId)
+											}
+										}}
 									/>
 								))}
 							</div>

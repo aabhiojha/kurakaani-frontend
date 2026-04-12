@@ -92,8 +92,9 @@ type ConnectOptions = {
 
 export class ChatSocketService {
 	private client: Client | null = null
-	private roomSubscriptions = new Map<number, StompSubscription>()
+	private roomSubscriptions = new Map<number, StompSubscription[]>()
 	private typingSubscriptions = new Map<number, StompSubscription>()
+	private directMessageSubscription: StompSubscription | null = null
 	private notificationSubscription: StompSubscription | null = null
 	private debug = false
 
@@ -115,9 +116,30 @@ export class ChatSocketService {
 	}
 
 	private resolveWebSocketUrl(): string {
-		const normalizedBase = API_BASE_URL.replace(/\/$/, '')
-		const httpBase = normalizedBase || window.location.origin.replace(/\/$/, '')
-		return `${httpBase}/ws`
+		const trimmedBase = API_BASE_URL.trim()
+		if (!trimmedBase) {
+			return `${window.location.origin.replace(/\/$/, '')}/ws`
+		}
+
+		try {
+			const resolved = new URL(trimmedBase, window.location.origin)
+			if (resolved.pathname.endsWith('/api')) {
+				resolved.pathname = resolved.pathname.slice(0, -4) || '/'
+			}
+
+			return `${resolved.origin}${resolved.pathname.replace(/\/$/, '')}/ws`
+		} catch {
+			const normalizedBase = trimmedBase.replace(/\/$/, '')
+			return `${normalizedBase}/ws`
+		}
+	}
+
+	private subscribeToDestination(destination: string, onFrame: (frame: IMessage) => void) {
+		if (!this.client?.connected) {
+			throw new Error('WebSocket client is not connected')
+		}
+
+		return this.client.subscribe(destination, onFrame)
 	}
 
 	connect(accessToken: string, options: ConnectOptions = {}) {
@@ -183,32 +205,32 @@ export class ChatSocketService {
 	}
 
 	subscribe(roomId: number, onMessage: (message: ServerMessage) => void) {
-		if (!this.client?.connected) {
-			throw new Error('WebSocket client is not connected')
-		}
-
 		const existing = this.roomSubscriptions.get(roomId)
-		if (existing) {
+		if (existing?.length) {
 			this.log('replacing message subscription', { roomId })
 		}
-		existing?.unsubscribe()
 
-		const subscription = this.client.subscribe(`/topic/rooms/${roomId}`, (frame: IMessage) => {
-			this.log('incoming message frame', { roomId, body: frame.body })
-			onMessage(JSON.parse(frame.body) as ServerMessage)
-		})
+		existing?.forEach((subscription) => subscription.unsubscribe())
 
-		this.log('subscribed to room messages', { roomId, destination: `/topic/rooms/${roomId}` })
+		const destinations = [`/topic/chat.group.${roomId}`, `/topic/rooms/${roomId}`]
+		const subscriptions = destinations.map((destination) =>
+			this.subscribeToDestination(destination, (frame: IMessage) => {
+				this.log('incoming message frame', { roomId, destination, body: frame.body })
+				onMessage(JSON.parse(frame.body) as ServerMessage)
+			}),
+		)
 
-		this.roomSubscriptions.set(roomId, subscription)
-		return subscription
+		this.log('subscribed to room messages', { roomId, destinations })
+
+		this.roomSubscriptions.set(roomId, subscriptions)
+		return subscriptions[0]
 	}
 
 	unsubscribe(roomId: number) {
-		const subscription = this.roomSubscriptions.get(roomId)
-		subscription?.unsubscribe()
+		const subscriptions = this.roomSubscriptions.get(roomId)
+		subscriptions?.forEach((subscription) => subscription.unsubscribe())
 		this.roomSubscriptions.delete(roomId)
-		this.log('unsubscribed from room messages', { roomId, destination: `/topic/rooms/${roomId}` })
+		this.log('unsubscribed from room messages', { roomId, destinations: [`/topic/chat.group.${roomId}`, `/topic/rooms/${roomId}`] })
 	}
 
 	subscribeToTyping(roomId: number, onTypingEvent: (event: TypingEvent) => void) {
@@ -241,17 +263,13 @@ export class ChatSocketService {
 	}
 
 	subscribeToNotifications(onNotificationEvent: (event: NotificationEvent) => void) {
-		if (!this.client?.connected) {
-			throw new Error('WebSocket client is not connected')
-		}
-
 		if (this.notificationSubscription) {
 			this.notificationSubscription.unsubscribe()
 			this.notificationSubscription = null
 			this.log('replacing notifications subscription')
 		}
 
-		this.notificationSubscription = this.client.subscribe('/user/queue/notifications', (frame: IMessage) => {
+		this.notificationSubscription = this.subscribeToDestination('/user/queue/notifications', (frame: IMessage) => {
 			this.log('incoming notification frame', { body: frame.body })
 			const rawEvent = JSON.parse(frame.body) as RawNotificationEvent
 			const payload = rawEvent.payload ?? rawEvent.data ?? rawEvent.body
@@ -318,10 +336,32 @@ export class ChatSocketService {
 		return this.notificationSubscription
 	}
 
+	subscribeToDirectMessages(onMessage: (message: ServerMessage) => void) {
+		if (this.directMessageSubscription) {
+			this.directMessageSubscription.unsubscribe()
+			this.directMessageSubscription = null
+			this.log('replacing direct message subscription')
+		}
+
+		this.directMessageSubscription = this.subscribeToDestination('/user/queue/messages', (frame: IMessage) => {
+			this.log('incoming direct message frame', { body: frame.body })
+			onMessage(JSON.parse(frame.body) as ServerMessage)
+		})
+
+		this.log('subscribed to direct messages', { destination: '/user/queue/messages' })
+		return this.directMessageSubscription
+	}
+
 	unsubscribeNotifications() {
 		this.notificationSubscription?.unsubscribe()
 		this.notificationSubscription = null
 		this.log('unsubscribed from notifications', { destination: '/user/queue/notifications' })
+	}
+
+	unsubscribeDirectMessages() {
+		this.directMessageSubscription?.unsubscribe()
+		this.directMessageSubscription = null
+		this.log('unsubscribed from direct messages', { destination: '/user/queue/messages' })
 	}
 
 	send(roomId: number, content: string) {
@@ -354,10 +394,13 @@ export class ChatSocketService {
 
 	disconnect() {
 		this.log('disconnecting client')
-		this.roomSubscriptions.forEach((subscription) => subscription.unsubscribe())
+		this.roomSubscriptions.forEach((subscriptions) =>
+			subscriptions.forEach((subscription) => subscription.unsubscribe()),
+		)
 		this.roomSubscriptions.clear()
 		this.typingSubscriptions.forEach((subscription) => subscription.unsubscribe())
 		this.typingSubscriptions.clear()
+		this.unsubscribeDirectMessages()
 		this.notificationSubscription?.unsubscribe()
 		this.notificationSubscription = null
 		this.client?.deactivate()

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { useEffect, useRef, useState } from 'react'
 import type React from 'react'
 import { ChatSocketService } from '../services/chatSocketService'
@@ -117,6 +118,124 @@ export function useChatSocket({
 		const next = tempMessageIdRef.current
 		tempMessageIdRef.current -= 1
 		return next
+	}
+
+	const handleIncomingServerMessage = (payload: ServerMessage) => {
+		setMessagesByConversation((prev) => {
+			const payloadRoomId =
+				typeof payload.roomId === 'number' ? payload.roomId : Number(payload.roomId)
+			const targetRoomId = Number.isFinite(payloadRoomId) && payloadRoomId > 0 ? payloadRoomId : undefined
+			if (!targetRoomId) {
+				return prev
+			}
+
+			const current = prev[targetRoomId] ?? []
+			if (current.some((m) => m.id === payload.id)) return prev
+
+			const normalized = normalizeMessageContent(payload.content)
+			const byRoom = pendingSentMessagesRef.current.get(targetRoomId)
+			const pendingCount = normalized ? (byRoom?.get(normalized) ?? 0) : 0
+			const optimisticIndex = normalized
+				? current.findIndex(
+						(message) =>
+							message.isSent &&
+							(message.deliveryState === 'pending' || message.deliveryState === 'sent') &&
+							normalizeMessageContent(message.text) === normalized,
+					)
+				: -1
+			const hasOptimisticMatch = optimisticIndex >= 0
+			const isMedia = payload.messageType === 'IMAGE' || payload.messageType === 'VIDEO'
+			const pendingMedia = isMedia ? (pendingMediaUploadsRef.current.get(targetRoomId) ?? 0) : 0
+			const fromCurrentUser =
+				payload.senderId === session?.user.id ||
+				pendingCount > 0 ||
+				hasOptimisticMatch ||
+				(isMedia && pendingMedia > 0)
+
+			if (byRoom && pendingCount > 0 && normalized) {
+				if (pendingCount === 1) byRoom.delete(normalized)
+				else byRoom.set(normalized, pendingCount - 1)
+				if (byRoom.size === 0) pendingSentMessagesRef.current.delete(targetRoomId)
+			}
+
+			if (isMedia && pendingMedia > 0 && fromCurrentUser) {
+				if (pendingMedia === 1) pendingMediaUploadsRef.current.delete(targetRoomId)
+				else pendingMediaUploadsRef.current.set(targetRoomId, pendingMedia - 1)
+			}
+
+			const timestamp = payload.createdAt
+				? new Date(payload.createdAt).toLocaleTimeString([], {
+						hour: '2-digit',
+						minute: '2-digit',
+					})
+				: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+			const senderName = fromCurrentUser
+				? 'You'
+				: getKnownSenderName(current, payload.senderId)
+			const senderProfileImageUrl = fromCurrentUser
+				? (currentUserProfile?.profileImageUrl ?? session?.user.profileImageUrl)
+				: getKnownSenderProfileImageUrl(current, payload.senderId)
+
+			const resolvedMessage: Message = {
+				id: payload.id,
+				isSent: fromCurrentUser,
+				senderName,
+				senderAvatar: fromCurrentUser
+					? 'YO'
+					: getAvatarFromName(
+							senderName,
+							`U${String(payload.senderId ?? '').slice(-1) || 'S'}`,
+						),
+				senderProfileImageUrl,
+				senderId: payload.senderId,
+				text: payload.content ?? '',
+				timestamp,
+				messageType: payload.messageType ?? 'TEXT',
+				mediaUrl: payload.mediaUrl ?? undefined,
+				mediaContentType: payload.mediaContentType ?? undefined,
+				mediaFileName: payload.mediaFileName ?? undefined,
+				deliveryState: fromCurrentUser ? 'delivered' : undefined,
+				retryable: false,
+			}
+
+			if (fromCurrentUser && hasOptimisticMatch) {
+				const updated = [...current]
+				updated[optimisticIndex] = {
+					...updated[optimisticIndex],
+					...resolvedMessage,
+				}
+				return {
+					...prev,
+					[targetRoomId]: updated,
+				}
+			}
+
+			if (fromCurrentUser && normalized) {
+				const fallbackIndex = current.findIndex(
+					(message) =>
+						message.isSent &&
+						(message.deliveryState === 'pending' || message.deliveryState === 'sent') &&
+						normalizeMessageContent(message.text) === normalized,
+				)
+
+				if (fallbackIndex >= 0) {
+					const updated = [...current]
+					updated[fallbackIndex] = {
+						...updated[fallbackIndex],
+						...resolvedMessage,
+					}
+					return {
+						...prev,
+						[targetRoomId]: updated,
+					}
+				}
+			}
+
+			return {
+				...prev,
+				[targetRoomId]: [...current, resolvedMessage],
+			}
+		})
 	}
 
 	const markMessageStatus = (
@@ -299,7 +418,12 @@ export function useChatSocket({
 	// Connect/disconnect on session change
 	useEffect(() => {
 		if (!session?.accessToken) {
-			disconnectAndCleanup()
+			chatSocketRef.current.disconnect()
+			subscribedRoomIdRef.current = null
+			subscribedTypingRoomIdRef.current = null
+			typingExpiryTimersRef.current.forEach((id) => window.clearTimeout(id))
+			typingExpiryTimersRef.current.clear()
+			pendingMediaUploadsRef.current.clear()
 			return
 		}
 		chatSocketRef.current.connect(session.accessToken, {
@@ -319,6 +443,23 @@ export function useChatSocket({
 			setIsSocketConnected(false)
 		}
 	}, [session?.accessToken])
+
+	useEffect(() => {
+		if (!session?.accessToken || !isSocketConnected) {
+			chatSocketRef.current.unsubscribeDirectMessages()
+			return
+		}
+
+		try {
+			chatSocketRef.current.subscribeToDirectMessages(handleIncomingServerMessage)
+		} catch {
+			// Wait for the websocket to reconnect.
+		}
+
+		return () => {
+			chatSocketRef.current.unsubscribeDirectMessages()
+		}
+	}, [handleIncomingServerMessage, isSocketConnected, session?.accessToken])
 
 	// Subscribe to the personal notification channel
 	useEffect(() => {
@@ -364,123 +505,6 @@ export function useChatSocket({
 		}
 
 		const roomId = activeConversation.id
-
-		const appendIncomingMessage = (payload: ServerMessage) => {
-			setMessagesByConversation((prev) => {
-				const payloadRoomId =
-					typeof payload.roomId === 'number' ? payload.roomId : Number(payload.roomId)
-				const targetRoomId = Number.isFinite(payloadRoomId) && payloadRoomId > 0 ? payloadRoomId : roomId
-				const current = prev[targetRoomId] ?? []
-				if (current.some((m) => m.id === payload.id)) return prev
-
-				const normalized = normalizeMessageContent(payload.content)
-				const byRoom = pendingSentMessagesRef.current.get(targetRoomId)
-				const pendingCount = normalized ? (byRoom?.get(normalized) ?? 0) : 0
-				const optimisticIndex = normalized
-					? current.findIndex(
-							(message) =>
-								message.isSent &&
-								(message.deliveryState === 'pending' || message.deliveryState === 'sent') &&
-								normalizeMessageContent(message.text) === normalized,
-						)
-					: -1
-				const hasOptimisticMatch = optimisticIndex >= 0
-				const isMedia = payload.messageType === 'IMAGE' || payload.messageType === 'VIDEO'
-				const pendingMedia = isMedia ? (pendingMediaUploadsRef.current.get(targetRoomId) ?? 0) : 0
-				const fromCurrentUser =
-					payload.senderId === session.user.id ||
-					pendingCount > 0 ||
-					hasOptimisticMatch ||
-					(isMedia && pendingMedia > 0)
-
-				if (byRoom && pendingCount > 0 && normalized) {
-					if (pendingCount === 1) byRoom.delete(normalized)
-					else byRoom.set(normalized, pendingCount - 1)
-					if (byRoom.size === 0) pendingSentMessagesRef.current.delete(targetRoomId)
-				}
-
-				if (isMedia && pendingMedia > 0 && fromCurrentUser) {
-					if (pendingMedia === 1) pendingMediaUploadsRef.current.delete(targetRoomId)
-					else pendingMediaUploadsRef.current.set(targetRoomId, pendingMedia - 1)
-				}
-
-				const timestamp = payload.createdAt
-					? new Date(payload.createdAt).toLocaleTimeString([], {
-							hour: '2-digit',
-							minute: '2-digit',
-						})
-					: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-				const senderName = fromCurrentUser
-					? 'You'
-					: getKnownSenderName(current, payload.senderId)
-				const senderProfileImageUrl = fromCurrentUser
-					? (currentUserProfile?.profileImageUrl ?? session.user.profileImageUrl)
-					: getKnownSenderProfileImageUrl(current, payload.senderId)
-
-				const resolvedMessage: Message = {
-					id: payload.id,
-					isSent: fromCurrentUser,
-					senderName,
-					senderAvatar: fromCurrentUser
-						? 'YO'
-						: getAvatarFromName(
-								senderName,
-								`U${String(payload.senderId ?? '').slice(-1) || 'S'}`,
-							),
-					senderProfileImageUrl,
-					senderId: payload.senderId,
-					text: payload.content ?? '',
-					timestamp,
-					messageType: payload.messageType ?? 'TEXT',
-					mediaUrl: payload.mediaUrl ?? undefined,
-					mediaContentType: payload.mediaContentType ?? undefined,
-					mediaFileName: payload.mediaFileName ?? undefined,
-					deliveryState: fromCurrentUser ? 'delivered' : undefined,
-					retryable: false,
-				}
-
-				if (fromCurrentUser && hasOptimisticMatch) {
-					const updated = [...current]
-					updated[optimisticIndex] = {
-						...updated[optimisticIndex],
-						...resolvedMessage,
-					}
-					return {
-						...prev,
-						[targetRoomId]: updated,
-					}
-				}
-
-				if (fromCurrentUser && normalized) {
-					const fallbackIndex = current.findIndex(
-						(message) =>
-							message.isSent &&
-							(message.deliveryState === 'pending' || message.deliveryState === 'sent') &&
-							normalizeMessageContent(message.text) === normalized,
-					)
-
-					if (fallbackIndex >= 0) {
-						const updated = [...current]
-						updated[fallbackIndex] = {
-							...updated[fallbackIndex],
-							...resolvedMessage,
-						}
-						return {
-							...prev,
-							[targetRoomId]: updated,
-						}
-					}
-				}
-
-				return {
-					...prev,
-					[targetRoomId]: [
-						...current,
-						resolvedMessage,
-					],
-				}
-			})
-		}
 
 		const handleTypingEvent = (event: TypingEvent) => {
 			const senderId = event.userId ?? event.senderId
@@ -579,7 +603,7 @@ export function useChatSocket({
 		const interval = window.setInterval(() => {
 			if (disposed || !chatSocketRef.current.isConnected()) return
 			try {
-				chatSocketRef.current.subscribe(roomId, appendIncomingMessage)
+				chatSocketRef.current.subscribe(roomId, handleIncomingServerMessage)
 				chatSocketRef.current.subscribeToTyping(roomId, handleTypingEvent)
 				subscribedRoomIdRef.current = roomId
 				subscribedTypingRoomIdRef.current = roomId

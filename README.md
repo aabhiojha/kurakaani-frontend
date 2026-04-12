@@ -1,81 +1,55 @@
-# React + TypeScript + Vite
+# Kurakaani Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript frontend for the Kurakaani chat backend.
 
-Currently, two official plugins are available:
+## What This Project Does
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Authenticates users with JWT.
+- Loads rooms, messages, friendships, and profile data over REST.
+- Connects to the backend websocket for realtime room messages, typing, and notifications.
+- Supports direct messages, group chats, room management, media uploads, and profile updates.
 
-## React Compiler
+## Integration Docs
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- [Backend Integration Guide](./docs/backend-integration-guide.md)
+- [Frontend WebSocket and Redis Integration Guide](./docs/frontend-websocket-redis-integration.md)
 
-## Expanding the ESLint configuration
+Read those first if you are wiring this app to a backend or extending the contract.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Prerequisites
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- Node.js 20+.
+- A backend instance that matches the documented API contract.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Environment
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+Copy `.env.example` to `.env` and adjust the values for your backend.
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Key variables:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- `VITE_API_BASE_URL`: backend origin used by the frontend runtime.
+- `VITE_BACKEND_PROXY_TARGET`: backend target used by the Vite dev server proxy.
+- `VITE_GLOBAL_ROOM_ID`: room ID that should be auto-joined after login.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## Scripts
 
-## Backend setup (development)
+- `npm run dev` - start the Vite dev server.
+- `npm run build` - type-check and build the production bundle.
+- `npm run lint` - run ESLint.
+- `npm run preview` - preview the production build locally.
 
-The dev server proxies backend routes (`/api`, `/oauth2`, `/ws`) using `VITE_BACKEND_PROXY_TARGET`.
+## Development Notes
 
-- Default target is `http://localhost:8080`.
-- If your backend runs elsewhere, copy `.env.example` to `.env` and set `VITE_BACKEND_PROXY_TARGET`.
-- Restart `npm run dev` after changing `.env` values.
+- REST is the source of truth.
+- Websocket traffic is a live update layer, not a durable store.
+- The frontend now subscribes to the documented websocket destinations and keeps legacy topic support as a fallback.
+
+## Backend Proxy
+
+During local development the Vite server proxies:
+
+- `/api`
+- `/oauth2`
+- `/ws`
+
+The proxy target comes from `VITE_BACKEND_PROXY_TARGET` and defaults to `http://localhost:8080`.

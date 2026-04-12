@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { LayoutPanelLeft, MessageSquare, MessagesSquare, PanelLeftClose } from 'lucide-react'
 import { LoginPage } from './components/auth/LoginPage'
 import { PasswordResetPage } from './components/auth/PasswordResetPage'
@@ -60,14 +60,26 @@ function App() {
 	const [backendStatus, setBackendStatus] = useState('Checking backend connection...')
 	const [isAuthSubmitting, setIsAuthSubmitting] = useState(false)
 	const [currentUserProfile, setCurrentUserProfile] = useState<CurrentUserResponse | undefined>(undefined)
-	const attemptedGlobalJoinIdsRef = useMemo(() => new Set<number>(), [])
+	const attemptedGlobalJoinIdsRef = useRef(new Set<number>())
 
 	const { themeMode, isDarkMode, setThemeMode } = useTheme()
 
 	const layout = useLayout(activeView)
 	const { isMobile, isDesktop, mobilePane, setMobilePane, isSidebarDrawerOpen, setIsSidebarDrawerOpen, isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed } = layout
 
-	const friendships = useFriendships()
+	const {
+		incomingFriendRequests,
+		sentFriendRequests,
+		friends,
+		isFriendshipsLoading,
+		friendshipStatus,
+		loadFriendships,
+		clearFriendships,
+		handleFriendshipNotification,
+		handleSendFriendRequest,
+		handleRespondToFriendRequest,
+		handleCancelFriendRequest,
+	} = useFriendships()
 
 	const rooms = useRooms(session, currentUserProfile, setBackendStatus, (view) =>
 		setActiveView(view),
@@ -117,7 +129,7 @@ function App() {
 		messagesByConversation,
 		pendingMediaUploadsRef,
 		setMessagesByConversation,
-		onNotification: (event, userId) => handleSocketNotification(event, userId),
+		onNotification: (event) => handleSocketNotification(event),
 		setBackendStatus,
 	})
 	const {
@@ -131,12 +143,12 @@ function App() {
 	} = chatSocket
 
 	const activeTypingUsers = activeConversation ? (typingUsersByConversation[activeConversation.id] ?? []) : []
-	const activeTypingText = useMemo(() => {
-		if (activeTypingUsers.length === 0) return null
-		const names = activeTypingUsers.map((u) => u.userName)
-		if (names.length === 1) return `${names[0]} is typing...`
-		return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} are typing...`
-	}, [activeTypingUsers])
+	const activeTypingText =
+		activeTypingUsers.length === 0
+			? null
+			: activeTypingUsers.length === 1
+				? `${activeTypingUsers[0].userName} is typing...`
+				: `${activeTypingUsers.slice(0, -1).map((u) => u.userName).join(', ')} and ${activeTypingUsers[activeTypingUsers.length - 1].userName} are typing...`
 
 	const sidebarUserName = currentUserProfile?.userName ?? session?.user.name
 	const sidebarUserProfileImageUrl = currentUserProfile?.profileImageUrl ?? session?.user.profileImageUrl
@@ -171,17 +183,17 @@ function App() {
 	// Load friendships on login
 	useEffect(() => {
 		if (!session?.accessToken) {
-			friendships.clearFriendships()
+			clearFriendships()
 			return
 		}
-		void friendships.loadFriendships()
-	}, [session?.accessToken])
+		void loadFriendships()
+	}, [clearFriendships, loadFriendships, session?.accessToken])
 
 	// Load room members when the active conversation changes
 	useEffect(() => {
 		if (!session?.accessToken || !activeConversation) return
 		void loadRoomMembers(activeConversation.id)
-	}, [activeConversation?.id, session?.accessToken])
+	}, [activeConversation, loadRoomMembers, session?.accessToken])
 
 	// Refresh friendship data when opening friendship-related sections.
 	useEffect(() => {
@@ -190,9 +202,9 @@ function App() {
 		}
 
 		if (activeView === 'friend-requests' || activeView === 'people' || activeView === 'profile') {
-			void friendships.loadFriendships()
+			void loadFriendships()
 		}
-	}, [activeView, session?.accessToken])
+	}, [activeView, loadFriendships, session?.accessToken])
 
 	// Ensure global room membership when user profile resolves
 	useEffect(() => {
@@ -207,8 +219,8 @@ function App() {
 		profile?: CurrentUserResponse,
 	) => {
 		const userId = profile?.id ?? sessionState.user.id
-		if (!userId || attemptedGlobalJoinIdsRef.has(userId)) return false
-		attemptedGlobalJoinIdsRef.add(userId)
+		if (!userId || attemptedGlobalJoinIdsRef.current.has(userId)) return false
+		attemptedGlobalJoinIdsRef.current.add(userId)
 		try {
 			const roomList = await getRooms()
 			if (roomList.some((r) => r.id === GLOBAL_ROOM_ID)) return false
@@ -309,9 +321,9 @@ function App() {
 	const handleLogout = () => {
 		logout()
 		disconnectAndCleanup()
-		friendships.clearFriendships()
-		clearRooms()
-		attemptedGlobalJoinIdsRef.clear()
+			clearFriendships()
+			clearRooms()
+		attemptedGlobalJoinIdsRef.current.clear()
 		setAuthView('login')
 		setSession(null)
 		setCurrentUserProfile(undefined)
@@ -372,9 +384,9 @@ function App() {
 		setBackendStatus('Profile updated successfully.')
 	}
 
-	function handleSocketNotification(event: NotificationEvent, userId: number) {
+	function handleSocketNotification(event: NotificationEvent) {
 		if (event.type === 'FRIEND_REQUEST') {
-			friendships.handleFriendshipNotification(event.payload, userId)
+			handleFriendshipNotification(event.payload)
 			return
 		}
 
@@ -478,7 +490,7 @@ function App() {
 		section: activeSection,
 		conversations: activeConversations,
 		selectedConversationId: activeConversation?.id ?? -1,
-		friends: friendships.friends,
+		friends,
 		onSelectConversation: handleSelectConversation,
 		onCreateDirect: handleCreateDirect,
 		onCreateGroup: handleCreateGroup,
@@ -489,11 +501,11 @@ function App() {
 		if (activeView === 'friend-requests') {
 			return (
 				<FriendRequestsPage
-					friendships={{ incoming: friendships.incomingFriendRequests, sent: friendships.sentFriendRequests }}
-					friendshipStatus={friendships.friendshipStatus}
-					isFriendshipsLoading={friendships.isFriendshipsLoading}
-					onRespondToFriendRequest={friendships.handleRespondToFriendRequest}
-					onCancelFriendRequest={friendships.handleCancelFriendRequest}
+					friendships={{ incoming: incomingFriendRequests, sent: sentFriendRequests }}
+					friendshipStatus={friendshipStatus}
+					isFriendshipsLoading={isFriendshipsLoading}
+					onRespondToFriendRequest={handleRespondToFriendRequest}
+					onCancelFriendRequest={handleCancelFriendRequest}
 				/>
 			)
 		}
@@ -503,11 +515,11 @@ function App() {
 				<FindPeoplePage
 					currentUserId={currentUserProfile?.id ?? session?.user.id}
 					friendships={{
-						incoming: friendships.incomingFriendRequests,
-						sent: friendships.sentFriendRequests,
-						friends: friendships.friends,
+						incoming: incomingFriendRequests,
+						sent: sentFriendRequests,
+						friends,
 					}}
-					onSendFriendRequest={friendships.handleSendFriendRequest}
+					onSendFriendRequest={handleSendFriendRequest}
 				/>
 			)
 		}
@@ -517,8 +529,8 @@ function App() {
 				<ProfilePage
 					session={session}
 					currentUser={currentUserProfile}
-					friendships={{ friends: friendships.friends }}
-					isFriendshipsLoading={friendships.isFriendshipsLoading}
+					friendships={{ friends }}
+					isFriendshipsLoading={isFriendshipsLoading}
 					onUploadProfileImage={handleUploadProfileImage}
 								onUpdateProfile={handleUpdateProfile}
 				/>

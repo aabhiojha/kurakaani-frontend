@@ -8,9 +8,9 @@ export function useLayout(activeView: SidebarView) {
 	const [viewportWidth, setViewportWidth] = useState(() =>
 		typeof window === 'undefined' ? 1280 : window.innerWidth,
 	)
-	const [mobilePane, setMobilePane] = useState<MobilePane>('detail')
-	const [isSidebarDrawerOpen, setIsSidebarDrawerOpen] = useState(false)
-	const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false)
+	const [mobilePaneState, setMobilePane] = useState<MobilePane>('detail')
+	const [isSidebarDrawerOpenState, setIsSidebarDrawerOpen] = useState(false)
+	const [isDesktopSidebarCollapsedState, setIsDesktopSidebarCollapsed] = useState(false)
 
 	const isMobile = viewportWidth < 768
 	const isTablet = viewportWidth >= 768 && viewportWidth < 1024
@@ -22,25 +22,15 @@ export function useLayout(activeView: SidebarView) {
 		return () => window.removeEventListener('resize', handleResize)
 	}, [])
 
-	useEffect(() => {
-		if (!isMobile) setMobilePane('detail')
-		if (isDesktop) setIsSidebarDrawerOpen(false)
-		if (!isDesktop) setIsDesktopSidebarCollapsed(false)
-	}, [isDesktop, isMobile])
-
-	useEffect(() => {
-		if (!isChatSection(activeView) && isMobile) setMobilePane('detail')
-	}, [activeView, isMobile])
-
 	return {
 		isMobile,
 		isTablet,
 		isDesktop,
-		mobilePane,
+		mobilePane: isMobile && isChatSection(activeView) ? mobilePaneState : 'detail',
 		setMobilePane,
-		isSidebarDrawerOpen,
+		isSidebarDrawerOpen: isDesktop ? false : isSidebarDrawerOpenState,
 		setIsSidebarDrawerOpen,
-		isDesktopSidebarCollapsed,
+		isDesktopSidebarCollapsed: isDesktop ? isDesktopSidebarCollapsedState : false,
 		setIsDesktopSidebarCollapsed,
 	}
 }

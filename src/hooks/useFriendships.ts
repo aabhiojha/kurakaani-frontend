@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
 	cancelFriendRequest,
 	getFriends,
@@ -17,7 +17,7 @@ export function useFriendships() {
 	const [isFriendshipsLoading, setIsFriendshipsLoading] = useState(false)
 	const [friendshipStatus, setFriendshipStatus] = useState<string | null>(null)
 
-	const loadFriendships = async () => {
+	const loadFriendships = useCallback(async () => {
 		setIsFriendshipsLoading(true)
 		try {
 			const [incomingResult, sentResult, acceptedResult] = await Promise.allSettled([
@@ -58,20 +58,17 @@ export function useFriendships() {
 		} finally {
 			setIsFriendshipsLoading(false)
 		}
-	}
+	}, [])
 
-	const clearFriendships = () => {
+	const clearFriendships = useCallback(() => {
 		setIncomingFriendRequests([])
 		setSentFriendRequests([])
 		setFriends([])
 		setFriendshipStatus(null)
-	}
+	}, [])
 
 	// Called by useChatSocket when a friendship notification arrives over WebSocket.
-	const handleFriendshipNotification = (
-		payload: FriendRequestNotificationPayload,
-		_currentUserId: number,
-	) => {
+	const handleFriendshipNotification = useCallback((payload: FriendRequestNotificationPayload) => {
 		void loadFriendships()
 
 		switch (payload.event) {
@@ -103,29 +100,29 @@ export function useFriendships() {
 				setFriendshipStatus('Friendship status updated.')
 				break
 		}
-	}
+	}, [loadFriendships])
 
-	const handleSendFriendRequest = async (userId: number) => {
+	const handleSendFriendRequest = useCallback(async (userId: number) => {
 		await sendFriendRequest(userId)
 		await loadFriendships()
 		setFriendshipStatus(`Friend request sent to user ${userId}.`)
-	}
+	}, [loadFriendships])
 
-	const handleRespondToFriendRequest = async (userId: number, response: 'ACCEPT' | 'REJECT') => {
+	const handleRespondToFriendRequest = useCallback(async (userId: number, response: 'ACCEPT' | 'REJECT') => {
 		await respondToFriendRequest(userId, response)
 		await loadFriendships()
 		setFriendshipStatus(
 			`Friend request from user ${userId} ${response === 'ACCEPT' ? 'accepted' : 'rejected'}.`,
 		)
-	}
+	}, [loadFriendships])
 
-	const handleCancelFriendRequest = async (userId: number) => {
+	const handleCancelFriendRequest = useCallback(async (userId: number) => {
 		await cancelFriendRequest(userId)
 		await loadFriendships()
 		setFriendshipStatus(`Cancelled friend request to user ${userId}.`)
-	}
+	}, [loadFriendships])
 
-	return {
+	return useMemo(() => ({
 		incomingFriendRequests,
 		sentFriendRequests,
 		friends,
@@ -137,5 +134,17 @@ export function useFriendships() {
 		handleSendFriendRequest,
 		handleRespondToFriendRequest,
 		handleCancelFriendRequest,
-	}
+	}), [
+		incomingFriendRequests,
+		sentFriendRequests,
+		friends,
+		isFriendshipsLoading,
+		friendshipStatus,
+		loadFriendships,
+		clearFriendships,
+		handleFriendshipNotification,
+		handleSendFriendRequest,
+		handleRespondToFriendRequest,
+		handleCancelFriendRequest,
+	])
 }

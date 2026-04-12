@@ -43,31 +43,41 @@ export function RecentMessagesPanel({
 
 	useEffect(() => {
 		if (newChatTrigger > 0) {
-			setIsComposerOpen(true)
+			const timeoutId = window.setTimeout(() => setIsComposerOpen(true), 0)
+			return () => window.clearTimeout(timeoutId)
 		}
 	}, [newChatTrigger])
 
 	useEffect(() => {
 		if (section !== 'groups') {
-			setMatchedRoomIds(null)
-			setSearchStatus(null)
-			setIsSearchingMessages(false)
-			return
+			const timeoutId = window.setTimeout(() => {
+				setMatchedRoomIds(null)
+				setSearchStatus(null)
+				setIsSearchingMessages(false)
+			}, 0)
+			return () => window.clearTimeout(timeoutId)
 		}
 
 		const trimmed = searchQuery.trim()
 		if (!trimmed) {
-			setMatchedRoomIds(null)
-			setSearchStatus(null)
-			setIsSearchingMessages(false)
-			return
+			const timeoutId = window.setTimeout(() => {
+				setMatchedRoomIds(null)
+				setSearchStatus(null)
+				setIsSearchingMessages(false)
+			}, 0)
+			return () => window.clearTimeout(timeoutId)
 		}
 
 		let disposed = false
-		setIsSearchingMessages(true)
-		setSearchStatus(null)
 
 		const timeoutId = window.setTimeout(() => {
+			if (disposed) {
+				return
+			}
+
+			setIsSearchingMessages(true)
+			setSearchStatus(null)
+
 			searchMessagesAcrossRooms(trimmed)
 				.then((results) => {
 					if (disposed) {
