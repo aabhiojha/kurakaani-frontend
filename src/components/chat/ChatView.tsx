@@ -16,7 +16,7 @@ const DRAFTS_STORAGE_KEY = 'kurakaani-chat-drafts'
 type ChatViewProps = {
 	conversation?: Conversation
 	messages: Message[]
-	typingIndicatorText?: string | null
+	typingUsers?: Array<{ userName: string }>
 	currentUserId?: number
 	roomMembers?: RoomMemberResponse[]
 	isRoomMembersLoading?: boolean
@@ -35,7 +35,7 @@ type ChatViewProps = {
 export function ChatView({
 	conversation,
 	messages,
-	typingIndicatorText = null,
+	typingUsers = [],
 	currentUserId,
 	roomMembers = [],
 	isRoomMembersLoading = false,
@@ -121,6 +121,13 @@ export function ChatView({
 	const isRightPanelOpen = rightPanelMode !== null
 	const displayedMessages = hasSearched ? searchedMessages : messages
 	const draft = conversationId ? draftsByConversation[conversationId] ?? '' : ''
+	const typingAvatar =
+		typingUsers[0]?.userName
+			?.split(' ')
+			.map((part) => part[0]?.toUpperCase())
+			.filter(Boolean)
+			.slice(0, 2)
+			.join('') || 'TY'
 
 	const getSenderKey = (message: Message) => {
 		if (typeof message.senderId === 'number' && message.senderId > 0) {
@@ -652,6 +659,42 @@ export function ChatView({
 									/>
 								))}
 							</div>
+							{typingUsers.length > 0 && (
+								<div className="motion-enter-soft mt-1.5 flex justify-start">
+									<div className="flex max-w-[78%] items-start gap-2.5">
+										<div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--border)] bg-[var(--avatar-neutral-bg)] text-[11px] font-semibold text-white">
+											{typingAvatar}
+										</div>
+										<div className="rounded-2xl rounded-bl-sm bg-[var(--bubble-received)] px-3.5 py-2 text-sm text-[var(--text-primary)] shadow-sm">
+											<div className="flex items-center gap-2.5">
+												<div className="flex items-center gap-1.5 pt-0.5" aria-hidden="true">
+													<span className="typing-dot" />
+													<span className="typing-dot typing-dot-delay-1" />
+													<span className="typing-dot typing-dot-delay-2" />
+												</div>
+												<p className="truncate text-xs font-medium leading-none text-[var(--text-secondary)]">
+													{typingUsers.length === 1 ? (
+														<>
+															<span className="font-semibold text-[var(--text-primary)]">{typingUsers[0].userName}</span> is typing
+														</>
+													) : (
+														<>
+															<span className="font-semibold text-[var(--text-primary)]">
+																{typingUsers.slice(0, -1).map((user) => user.userName).join(', ')}
+															</span>{' '}
+															and{' '}
+															<span className="font-semibold text-[var(--text-primary)]">
+																{typingUsers[typingUsers.length - 1].userName}
+															</span>{' '}
+															are typing
+														</>
+													)}
+												</p>
+											</div>
+										</div>
+									</div>
+								</div>
+							)}
 						</>
 					) : (
 						<div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 text-center">
@@ -680,10 +723,6 @@ export function ChatView({
 				)}
 				</div>
 
-				<div className="min-h-7 border-t border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1.5 sm:px-5 lg:px-6">
-					<p className="text-xs text-[var(--text-secondary)]">{typingIndicatorText ?? '\u00A0'}</p>
-				</div>
-
 				<form onSubmit={onSubmit} className="border-t border-[var(--border)] bg-[var(--bg-surface)] px-3 py-3 sm:px-5 sm:py-4 lg:px-6">
 					<div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-soft)] p-2 shadow-sm">
 						<div className="flex items-center gap-1">
@@ -707,23 +746,25 @@ export function ChatView({
 								<ImageIcon size={18} />
 							</button>
 
-							<textarea
-								value={draft}
-								onChange={(event) => {
-									setDraftForConversation(event.target.value)
-									if (event.target.value.trim().length === 0) {
-										stopTyping()
-										return
-									}
+							<div className="relative min-h-11 flex-1">
+								<textarea
+									value={draft}
+									onChange={(event) => {
+										setDraftForConversation(event.target.value)
+										if (event.target.value.trim().length === 0) {
+											stopTyping()
+											return
+										}
 
-									startTyping()
-								}}
-								onKeyDown={onKeyDown}
-								disabled={isSendDisabled}
-								rows={1}
-								placeholder={`Type your message to ${conversation.name}…`}
-								className="motion-focus min-h-11 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] disabled:cursor-not-allowed disabled:opacity-60"
-							/>
+										startTyping()
+									}}
+									onKeyDown={onKeyDown}
+									disabled={isSendDisabled}
+									rows={1}
+									placeholder={`Type your message to ${conversation.name}…`}
+									className="motion-focus min-h-11 w-full resize-none bg-transparent px-2 py-2 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] disabled:cursor-not-allowed disabled:opacity-60"
+								/>
+							</div>
 
 							<div ref={emojiPickerRef} className="relative">
 								<button

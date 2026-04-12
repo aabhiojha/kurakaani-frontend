@@ -143,13 +143,6 @@ function App() {
 	} = chatSocket
 
 	const activeTypingUsers = activeConversation ? (typingUsersByConversation[activeConversation.id] ?? []) : []
-	const activeTypingText =
-		activeTypingUsers.length === 0
-			? null
-			: activeTypingUsers.length === 1
-				? `${activeTypingUsers[0].userName} is typing...`
-				: `${activeTypingUsers.slice(0, -1).map((u) => u.userName).join(', ')} and ${activeTypingUsers[activeTypingUsers.length - 1].userName} are typing...`
-
 	const sidebarUserName = currentUserProfile?.userName ?? session?.user.name
 	const sidebarUserProfileImageUrl = currentUserProfile?.profileImageUrl ?? session?.user.profileImageUrl
 
@@ -470,7 +463,7 @@ function App() {
 
 	const sharedChatViewProps = {
 		messages: activeMessages,
-		typingIndicatorText: activeTypingText,
+		typingUsers: activeTypingUsers,
 		currentUserId: currentUserProfile?.id ?? session?.user.id,
 		roomMembers: activeRoomMembers,
 		isRoomMembersLoading,

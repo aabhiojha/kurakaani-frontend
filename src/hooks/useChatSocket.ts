@@ -544,7 +544,7 @@ export function useChatSocket({
 						}
 						return { ...prev, [roomId]: next }
 					})
-				}, 3000)
+				}, 15000)
 
 				typingExpiryTimersRef.current.set(`${roomId}:${senderId}`, timerId)
 				return
