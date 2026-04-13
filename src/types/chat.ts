@@ -30,4 +30,5 @@ export type Conversation = {
 	avatarImageUrl?: string
 	isGroup: boolean
 	online?: boolean
+	unreadCount?: number
 }

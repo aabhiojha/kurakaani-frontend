@@ -196,9 +196,59 @@ export function useRooms(
 							: c.subtitle,
 					preview: nextDesc || c.preview,
 					avatar: getAvatarFromName(nextName, c.isGroup ? 'GR' : 'DM'),
+					unreadCount: c.unreadCount ?? 0,
 				}
 			}
 			return { ...prev, direct: prev.direct.map(apply), groups: prev.groups.map(apply) }
+		})
+	}, [])
+
+	const touchConversation = useCallback((
+		roomId: number,
+		updates: { preview?: string; time?: string; unreadDelta?: number },
+	) => {
+		setConversationsState((prev) => {
+			const updateList = (conversations: Conversation[]) => {
+				const index = conversations.findIndex((conversation) => conversation.id === roomId)
+				if (index < 0) {
+					return conversations
+				}
+
+				const current = conversations[index]
+				const nextUnreadCount = Math.max(0, (current.unreadCount ?? 0) + (updates.unreadDelta ?? 0))
+				const nextConversation: Conversation = {
+					...current,
+					preview: updates.preview ?? current.preview,
+					time: updates.time ?? current.time,
+					unreadCount: nextUnreadCount,
+				}
+
+				return [nextConversation, ...conversations.slice(0, index), ...conversations.slice(index + 1)]
+			}
+
+			return {
+				direct: updateList(prev.direct),
+				groups: updateList(prev.groups),
+			}
+		})
+	}, [])
+
+	const clearConversationUnread = useCallback((roomId: number) => {
+		setConversationsState((prev) => {
+			const resetList = (conversations: Conversation[]) =>
+				conversations.map((conversation) =>
+					conversation.id === roomId
+						? {
+								...conversation,
+								unreadCount: 0,
+							}
+						: conversation,
+				)
+
+			return {
+				direct: resetList(prev.direct),
+				groups: resetList(prev.groups),
+			}
 		})
 	}, [])
 
@@ -218,6 +268,7 @@ export function useRooms(
 		avatar: name.split(' ').map((p) => p[0]?.toUpperCase()).filter(Boolean).slice(0, 2).join('') || (isGroup ? 'GR' : 'DM'),
 		isGroup,
 		online: isGroup ? undefined : true,
+		unreadCount: 0,
 	}), [])
 
 	const addLocalConversation = useCallback((conversation: Conversation, systemText: string) => {
@@ -367,6 +418,13 @@ export function useRooms(
 				const timestamp = uploaded.createdAt
 					? new Date(uploaded.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 					: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+				const preview =
+					uploaded.messageType === 'IMAGE'
+						? 'Shared an image'
+						: uploaded.messageType === 'VIDEO'
+							? 'Shared a video'
+							: uploaded.content ?? ''
+				touchConversation(conversationId, { preview: preview || 'New message', time: timestamp })
 				return {
 					...prev,
 					[conversationId]: [
@@ -398,7 +456,7 @@ export function useRooms(
 			else pendingMediaUploadsRef.current.set(conversationId, count - 1)
 			setBackendStatus(getErrorMessage(error, 'Media upload failed. Please try again.'))
 		}
-	}, [currentUserProfile?.profileImageUrl, pendingMediaUploadsRef, session?.accessToken, session?.user.id, session?.user.profileImageUrl, setBackendStatus, setMessagesByConversation])
+	}, [currentUserProfile?.profileImageUrl, pendingMediaUploadsRef, session?.accessToken, session?.user.id, session?.user.profileImageUrl, setBackendStatus, setMessagesByConversation, touchConversation])
 
 	const clearRooms = useCallback(() => {
 		setConversationsState({ direct: [], groups: [] })
@@ -428,6 +486,8 @@ export function useRooms(
 		handleUpdateRoomDetails,
 		handleRemoveMembersFromRoom,
 		handleUploadMedia,
+		touchConversation,
+		clearConversationUnread,
 		clearRooms,
 	}), [
 		conversationsState,
@@ -444,6 +504,8 @@ export function useRooms(
 		handleUpdateRoomDetails,
 		handleRemoveMembersFromRoom,
 		handleUploadMedia,
+		touchConversation,
+		clearConversationUnread,
 		clearRooms,
 		pendingMediaUploadsRef,
 	])

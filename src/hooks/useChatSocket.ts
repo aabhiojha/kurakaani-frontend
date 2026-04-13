@@ -25,6 +25,10 @@ interface UseChatSocketParams {
 	pendingMediaUploadsRef: React.MutableRefObject<Map<number, number>>
 	setMessagesByConversation: SetMessages
 	onNotification: (event: NotificationEvent, currentUserId: number) => void
+	onConversationActivity?: (
+		conversationId: number,
+		updates: { preview: string; time: string; unreadDelta?: number },
+	) => void
 	setBackendStatus: (status: string) => void
 }
 
@@ -37,6 +41,7 @@ export function useChatSocket({
 	pendingMediaUploadsRef,
 	setMessagesByConversation,
 	onNotification,
+	onConversationActivity,
 	setBackendStatus,
 }: UseChatSocketParams) {
 	const [isSocketConnected, setIsSocketConnected] = useState(false)
@@ -175,7 +180,6 @@ export function useChatSocket({
 			const senderProfileImageUrl = fromCurrentUser
 				? (currentUserProfile?.profileImageUrl ?? session?.user.profileImageUrl)
 				: getKnownSenderProfileImageUrl(current, payload.senderId)
-
 			const resolvedMessage: Message = {
 				id: payload.id,
 				isSent: fromCurrentUser,
@@ -197,6 +201,18 @@ export function useChatSocket({
 				deliveryState: fromCurrentUser ? 'delivered' : undefined,
 				retryable: false,
 			}
+			const messagePreview =
+				resolvedMessage.messageType === 'IMAGE'
+					? 'Shared an image'
+					: resolvedMessage.messageType === 'VIDEO'
+						? 'Shared a video'
+						: resolvedMessage.text || 'New message'
+			const isActiveConversation = activeConversation?.id === targetRoomId
+			onConversationActivity?.(targetRoomId, {
+				preview: messagePreview,
+				time: timestamp,
+				unreadDelta: !fromCurrentUser && !isActiveConversation ? 1 : 0,
+			})
 
 			if (fromCurrentUser && hasOptimisticMatch) {
 				const updated = [...current]
@@ -230,7 +246,6 @@ export function useChatSocket({
 					}
 				}
 			}
-
 			return {
 				...prev,
 				[targetRoomId]: [...current, resolvedMessage],
@@ -326,7 +341,6 @@ export function useChatSocket({
 				],
 			}
 		})
-
 		incrementPendingMatch(conversationId, cleaned)
 
 		if (session?.accessToken) {

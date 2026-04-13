@@ -69,6 +69,7 @@ export const mapRoomToConversation = (room: RoomSummaryResponse): Conversation =
 		avatarImageUrl: room.roomImageUrl ?? undefined,
 		isGroup,
 		online: isGroup ? undefined : false,
+		unreadCount: 0,
 	}
 }
 

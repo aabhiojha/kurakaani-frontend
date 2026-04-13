@@ -242,6 +242,7 @@ export function RecentMessagesPanel({
 			<div className="space-y-1 px-2 py-2">
 				{visibleConversations.map((conversation) => {
 					const avatarUrl = resolveAssetUrl(conversation.avatarImageUrl)
+					const unreadCount = conversation.unreadCount ?? 0
 
 					return (
 						<article
@@ -276,10 +277,19 @@ export function RecentMessagesPanel({
 						</div>
 						<div className="min-w-0 flex-1">
 							<div className="mb-0.5 flex items-center justify-between gap-2">
-								<h3 className="truncate text-sm font-semibold text-[var(--text-primary)]">{conversation.name}</h3>
-								<span className="shrink-0 text-xs text-[var(--text-muted)]">{conversation.time}</span>
+								<div className="flex min-w-0 items-center gap-2">
+									<h3 className="truncate text-sm font-semibold text-[var(--text-primary)]">{conversation.name}</h3>
+									{unreadCount > 0 && (
+										<span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-[var(--bg-page)] shadow-sm">
+											{unreadCount > 99 ? '99+' : unreadCount}
+										</span>
+									)}
+								</div>
+								<span className={`shrink-0 text-xs ${unreadCount > 0 ? 'font-semibold text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>{conversation.time}</span>
 							</div>
-							<p className="truncate text-sm text-[var(--text-secondary)]">{conversation.preview}</p>
+							<p className={`truncate text-sm ${unreadCount > 0 ? 'font-medium text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
+								{conversation.preview}
+							</p>
 						</div>
 						</article>
 					)

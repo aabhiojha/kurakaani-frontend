@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LayoutPanelLeft, MessageSquare, MessagesSquare, PanelLeftClose } from 'lucide-react'
 import { LoginPage } from './components/auth/LoginPage'
 import { PasswordResetPage } from './components/auth/PasswordResetPage'
@@ -8,6 +8,7 @@ import { ChatView } from './components/chat/ChatView'
 import { FindPeoplePage } from './components/layout/FindPeoplePage'
 import { FriendRequestsPage } from './components/layout/FriendRequestsPage'
 import { ProfilePage } from './components/layout/ProfilePage'
+import { NotificationToasts } from './components/layout/NotificationToasts'
 import { RecentMessagesPanel } from './components/layout/RecentMessagesPanel'
 import { SettingsPage } from './components/layout/SettingsPage'
 import { Sidebar } from './components/layout/Sidebar'
@@ -27,7 +28,7 @@ import {
 import { addUsersToRoom, getRooms } from './services/roomService'
 import { GLOBAL_ROOM_ID } from './lib/config'
 import { getSession } from './lib/session'
-import { isChatSection, getErrorMessage } from './lib/chatUtils'
+import { getErrorMessage, isChatSection, toConversationTime } from './lib/chatUtils'
 import { useTheme } from './hooks/useTheme'
 import { useLayout } from './hooks/useLayout'
 import { useFriendships } from './hooks/useFriendships'
@@ -36,6 +37,7 @@ import { useChatSocket } from './hooks/useChatSocket'
 import type { ChatSection } from './types/chat'
 import type { CurrentUserResponse, SessionState } from './types/api/session'
 import type { NotificationEvent } from './services/chatSocketService'
+import type { NotificationToast } from './components/layout/NotificationToasts'
 
 type AuthActionResult = { ok: true; message?: string } | { ok: false; error: string }
 
@@ -60,7 +62,9 @@ function App() {
 	const [backendStatus, setBackendStatus] = useState('Checking backend connection...')
 	const [isAuthSubmitting, setIsAuthSubmitting] = useState(false)
 	const [currentUserProfile, setCurrentUserProfile] = useState<CurrentUserResponse | undefined>(undefined)
+	const [notifications, setNotifications] = useState<NotificationToast[]>([])
 	const attemptedGlobalJoinIdsRef = useRef(new Set<number>())
+	const notificationTimersRef = useRef<Map<string, number>>(new Map())
 
 	const { themeMode, isDarkMode, setThemeMode } = useTheme()
 
@@ -103,6 +107,8 @@ function App() {
 		handleUpdateRoomDetails,
 		handleRemoveMembersFromRoom,
 		handleUploadMedia,
+		touchConversation,
+		clearConversationUnread,
 		clearRooms,
 	} = rooms
 
@@ -130,6 +136,7 @@ function App() {
 		pendingMediaUploadsRef,
 		setMessagesByConversation,
 		onNotification: (event) => handleSocketNotification(event),
+		onConversationActivity: touchConversation,
 		setBackendStatus,
 	})
 	const {
@@ -145,6 +152,49 @@ function App() {
 	const activeTypingUsers = activeConversation ? (typingUsersByConversation[activeConversation.id] ?? []) : []
 	const sidebarUserName = currentUserProfile?.userName ?? session?.user.name
 	const sidebarUserProfileImageUrl = currentUserProfile?.profileImageUrl ?? session?.user.profileImageUrl
+
+	const dismissNotification = useCallback((id: string) => {
+		const timerId = notificationTimersRef.current.get(id)
+		if (typeof timerId === 'number') {
+			window.clearTimeout(timerId)
+			notificationTimersRef.current.delete(id)
+		}
+		setNotifications((prev) => prev.filter((notification) => notification.id !== id))
+	}, [])
+
+	const pushNotification = useCallback((notification: Omit<NotificationToast, 'id' | 'createdAt'>) => {
+		const id =
+			typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+				? crypto.randomUUID()
+				: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+		const createdAt = Date.now()
+
+		setNotifications((prev) => {
+			const nextNotifications = [{ id, createdAt, ...notification }, ...prev]
+			const overflow = nextNotifications.slice(4)
+			overflow.forEach((item) => {
+				const timerId = notificationTimersRef.current.get(item.id)
+				if (typeof timerId === 'number') {
+					window.clearTimeout(timerId)
+					notificationTimersRef.current.delete(item.id)
+				}
+			})
+			return nextNotifications.slice(0, 4)
+		})
+
+		const timerId = window.setTimeout(() => {
+			dismissNotification(id)
+		}, 7000)
+		notificationTimersRef.current.set(id, timerId)
+	}, [dismissNotification])
+
+	useEffect(() => {
+		const timers = notificationTimersRef.current
+		return () => {
+			timers.forEach((timerId) => window.clearTimeout(timerId))
+			timers.clear()
+		}
+	}, [])
 
 	// ── Persistence ───────────────────────────────────────────────────────────
 
@@ -187,6 +237,14 @@ function App() {
 		if (!session?.accessToken || !activeConversation) return
 		void loadRoomMembers(activeConversation.id)
 	}, [activeConversation, loadRoomMembers, session?.accessToken])
+
+	useEffect(() => {
+		if (!activeConversation?.id) {
+			return
+		}
+
+		clearConversationUnread(activeConversation.id)
+	}, [activeConversation?.id, clearConversationUnread])
 
 	// Refresh friendship data when opening friendship-related sections.
 	useEffect(() => {
@@ -314,9 +372,12 @@ function App() {
 	const handleLogout = () => {
 		logout()
 		disconnectAndCleanup()
-			clearFriendships()
-			clearRooms()
+		clearFriendships()
+		clearRooms()
 		attemptedGlobalJoinIdsRef.current.clear()
+		notificationTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
+		notificationTimersRef.current.clear()
+		setNotifications([])
 		setAuthView('login')
 		setSession(null)
 		setCurrentUserProfile(undefined)
@@ -378,25 +439,88 @@ function App() {
 	}
 
 	function handleSocketNotification(event: NotificationEvent) {
+		const getNotificationRoomId = () => {
+			const rawRoomId =
+				'roomId' in event.payload ? event.payload.roomId : undefined
+
+			if (typeof rawRoomId === 'number') {
+				return rawRoomId > 0 ? rawRoomId : null
+			}
+
+			if (typeof rawRoomId === 'string') {
+				const parsed = Number(rawRoomId)
+				return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+			}
+
+			return null
+		}
+
+		const applyRoomPreview = (roomId: number | null, preview?: string) => {
+			if (!roomId) {
+				return
+			}
+
+			const nextPreview = preview?.trim()
+			const nextTime = toConversationTime(event.timestamp)
+			touchConversation(roomId, {
+				preview: nextPreview && nextPreview.length > 0 ? nextPreview : 'New message',
+				time: nextTime,
+				unreadDelta: activeConversation?.id === roomId ? 0 : 1,
+			})
+		}
+
 		if (event.type === 'FRIEND_REQUEST') {
 			handleFriendshipNotification(event.payload)
+			const senderName = event.payload.senderName?.trim()
+			const title = senderName ? `${senderName} sent a friend request` : 'New friend request'
+			const body =
+				event.payload.event === 'ACCEPTED'
+					? senderName
+						? `${senderName} accepted your friend request.`
+						: 'Your friend request was accepted.'
+					: event.payload.event === 'DECLINED'
+						? senderName
+							? `${senderName} declined your friend request.`
+							: 'A friend request was declined.'
+						: event.payload.event === 'REMOVED'
+							? 'A friendship was removed.'
+							: 'Open friend requests to respond.'
+
+			pushNotification({
+				type: 'FRIEND_REQUEST',
+				title,
+				body,
+			})
 			return
 		}
 
 		if (event.type === 'DM') {
-			const preview = 'preview' in event.payload ? event.payload.preview : undefined
+			const preview = event.payload.preview?.trim()
+			const title = 'New direct message'
+			applyRoomPreview(getNotificationRoomId(), preview)
 			setBackendStatus(preview ? `New direct message: ${preview}` : 'New direct message received.')
+			pushNotification({
+				type: 'DM',
+				title,
+				body: preview ?? 'You have a new direct message.',
+			})
 			return
 		}
 
 		if (event.type === 'ROOM') {
-			const roomName = 'roomName' in event.payload ? event.payload.roomName : undefined
-			const preview = 'preview' in event.payload ? event.payload.preview : undefined
+			const roomName = event.payload.roomName?.trim()
+			const preview = event.payload.preview?.trim()
+			applyRoomPreview(getNotificationRoomId(), preview)
 			setBackendStatus(
 				roomName
 					? `New message in ${roomName}${preview ? `: ${preview}` : '.'}`
 					: 'New room message received.',
 			)
+			pushNotification({
+				type: 'ROOM',
+				title: roomName ? `${roomName}` : 'New room message',
+				body: preview ? preview : roomName ? 'A new message arrived in this room.' : 'A new room message arrived.',
+			})
 		}
 	}
 
@@ -417,6 +541,7 @@ function App() {
 
 	const handleSelectConversation = (conversationId: number) => {
 		setSelectedConversationId(conversationId)
+		clearConversationUnread(conversationId)
 		if (isMobile) setMobilePane('detail')
 	}
 
@@ -425,6 +550,7 @@ function App() {
 	if (!session?.accessToken) {
 		return (
 			<div data-theme={isDarkMode ? 'dark' : 'light'} className="min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)] antialiased">
+				<NotificationToasts notifications={notifications} onDismiss={dismissNotification} />
 				{authView === 'login' ? (
 					<LoginPage
 						isSubmitting={isAuthSubmitting}
@@ -577,6 +703,7 @@ function App() {
 
 	return (
 		<div data-theme={isDarkMode ? 'dark' : 'light'} className="h-screen min-h-screen overflow-hidden bg-[var(--bg-page)] p-0 text-[var(--text-primary)] antialiased sm:p-2 lg:p-3">
+			<NotificationToasts notifications={notifications} onDismiss={dismissNotification} />
 			<div className="relative flex h-full min-w-0 overflow-hidden rounded-none bg-[var(--bg-surface)] shadow-[var(--shadow-pane)] sm:rounded-[26px]">
 				{isDesktop && !isDesktopSidebarCollapsed && (
 					<Sidebar

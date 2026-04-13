@@ -21,7 +21,6 @@ export function ChatMessage({ message, isGroupedWithPrevious, isGroupedWithNext,
 	const avatarTopSpacingClass = isGroupedWithPrevious ? 'mt-0' : 'mt-4'
 	const bubbleStateClass =
 		message.deliveryState === 'pending' ? 'opacity-75' : message.deliveryState === 'failed' ? 'opacity-80' : 'opacity-100'
-
 	useEffect(() => {
 		if (!isMetaVisible) {
 			return
